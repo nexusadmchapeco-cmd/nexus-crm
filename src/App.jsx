@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 const SUPA_URL = "https://tmkjtyhybfbaqcqovuem.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRta2p0eWh5YmZiYXFjcW92dWVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDY5MjYsImV4cCI6MjA5MDEyMjkyNn0.ZqBH1WkFsXREV9oaDotWkC9kVNt1bA_ERjEZTNjeWO0";
 const supabase = createClient(SUPA_URL, SUPA_KEY);
-const LOGO = "/logo.png";
+const LOGO = "/logo.svg";
 
 const STAGES = [
   { id:"novo",        label:"Novo Lead",           emoji:"✦", hex:"#94a3b8", role:"sdr" },
