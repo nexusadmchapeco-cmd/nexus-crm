@@ -22,6 +22,11 @@ const STAGES = [
 const COURSES  = ["Nexus Class","Nexus Flex","Nexus Private","Nexus Junior","Nexus Travel"];
 const SOURCES  = ["Instagram","Indicação","Google","WhatsApp","Site","TikTok","Outros"];
 const CTYPES   = ["WhatsApp","Ligação","Email","Reunião","Anotação"];
+const UNITS = [
+  { id:"pf",     label:"Nexus PF",      color:"#dbeafe", border:"#93c5fd", text:"#1d4ed8" },
+  { id:"chape",  label:"Nexus Chapecó", color:"#ffedd5", border:"#fdba74", text:"#c2410c" },
+  { id:"online", label:"Nexus Online",  color:"#dcfce7", border:"#86efac", text:"#15803d" },
+];
 const NAV_ITEMS = [
   { id:"pipeline",   icon:"◫", label:"Pipeline"  },
   { id:"agenda",     icon:"📅", label:"Agenda"    },
@@ -288,17 +293,88 @@ function CashCelebration({onDone}) {
   );
 }
 
+/* ─── REUNIAO CELEBRATION ───────────────────────────────────────── */
+function ReuniaoCelebration({onDone}) {
+  const ref=useRef(null),anim=useRef(null);
+  useEffect(()=>{
+    try {
+      const ctx=new(window.AudioContext||window.webkitAudioContext)();
+      const playTone=(freq,start,dur,vol,type="sine")=>{
+        const o=ctx.createOscillator(),g=ctx.createGain();
+        o.type=type;o.frequency.value=freq;
+        g.gain.setValueAtTime(0,ctx.currentTime+start);
+        g.gain.linearRampToValueAtTime(vol,ctx.currentTime+start+0.02);
+        g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
+        o.connect(g);g.connect(ctx.destination);
+        o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);
+      };
+      // Triumphant fanfare
+      playTone(523,0,0.15,0.4,"square");
+      playTone(659,0.12,0.15,0.4,"square");
+      playTone(784,0.24,0.15,0.4,"square");
+      playTone(1047,0.36,0.4,0.5,"square");
+      playTone(784,0.36,0.4,0.3,"square");
+      // Crowd cheer
+      const bs=ctx.sampleRate*1.2,buf=ctx.createBuffer(1,bs,ctx.sampleRate),d=buf.getChannelData(0);
+      for(let i=0;i<bs;i++)d[i]=(Math.random()*2-1);
+      const ns=ctx.createBufferSource();ns.buffer=buf;
+      const fl=ctx.createBiquadFilter();fl.type="bandpass";fl.frequency.value=700;fl.Q.value=0.5;
+      const gn=ctx.createGain();gn.gain.setValueAtTime(0,ctx.currentTime+0.3);gn.gain.linearRampToValueAtTime(0.3,ctx.currentTime+0.5);gn.gain.linearRampToValueAtTime(0,ctx.currentTime+1.5);
+      ns.connect(fl);fl.connect(gn);gn.connect(ctx.destination);ns.start();ns.stop(ctx.currentTime+1.6);
+    } catch(e){}
+    const canvas=ref.current;if(!canvas)return;
+    canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+    const cx=canvas.getContext("2d");
+    const EMOJIS=["📅","🤝","⭐","✨","🎯","💪","🔥"];
+    const COLS=["#a78bfa","#818cf8","#c4b5fd","#7c3aed","#ddd6fe","#fff","#f59e0b"];
+    const ps=Array.from({length:200},(_,i)=>({
+      x:Math.random()*canvas.width,y:-20-Math.random()*150,
+      r:4+Math.random()*8,color:COLS[Math.floor(Math.random()*COLS.length)],
+      vx:(Math.random()-.5)*8,vy:2+Math.random()*6,
+      rot:Math.random()*Math.PI*2,rv:(Math.random()-.5)*.18,
+      sh:i<15?"emoji":"rect",emoji:EMOJIS[Math.floor(Math.random()*EMOJIS.length)],
+      size:18+Math.random()*16,op:1
+    }));
+    let fr=0;
+    const tick=()=>{
+      cx.clearRect(0,0,canvas.width,canvas.height);let alive=false;
+      ps.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.rot+=p.rv;p.vy+=0.15;
+        if(p.y<canvas.height+40){alive=true;p.op=Math.max(0,1-p.y/(canvas.height*1.1));}
+        cx.save();cx.globalAlpha=p.op;cx.translate(p.x,p.y);cx.rotate(p.rot);
+        if(p.sh==="emoji"){cx.font=`${p.size}px serif`;cx.fillText(p.emoji,-p.size/2,-p.size/2);}
+        else{cx.fillStyle=p.color;cx.fillRect(-p.r,-p.r/2,p.r*2,p.r);}
+        cx.restore();
+      });
+      fr++;if(alive&&fr<300)anim.current=requestAnimationFrame(tick);else onDone();
+    };
+    anim.current=requestAnimationFrame(tick);
+    return()=>cancelAnimationFrame(anim.current);
+  },[]);
+  return (
+    <>
+      <canvas ref={ref} style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:9999}}/>
+      <div style={{position:"fixed",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:9998,pointerEvents:"none"}}>
+        <div style={{animation:"cashPop .5s cubic-bezier(.17,.67,.35,1.4)",textAlign:"center",background:"rgba(255,255,255,.96)",borderRadius:28,padding:"36px 56px",boxShadow:"0 24px 70px rgba(0,0,0,.22)"}}>
+          <div style={{fontSize:72,lineHeight:1}}>📅</div>
+          <div style={{fontFamily:"'DM Serif Display',serif",fontSize:44,color:"#7c3aed",letterSpacing:"-1px",marginTop:12,fontStyle:"italic"}}>BOA FILHOTINHO!!</div>
+          <div style={{fontSize:16,color:T.muted,marginTop:8,fontWeight:600}}>Reunião agendada! 🎯</div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ─── QUICK ADD ──────────────────────────────────────────────────── */
 function QuickAddModal({onAdd,onClose,mob}) {
-  const [form,setForm]=useState({name:"",phone:"",course:"",source:"",responsavel:""});
+  const [form,setForm]=useState({name:"",phone:"",course:"",source:"",responsavel:"",unit:""});
   const [saving,setSaving]=useState(false);
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const submit=async()=>{
     if(!form.name.trim()||!form.phone.trim()){alert("Nome e telefone são obrigatórios.");return;}
     setSaving(true);
     const id=uid();
-    const{error}=await supabase.from("leads").insert({id,name:form.name,phone:form.phone,course:form.course||null,source:form.source||null,stage:"novo",responsavel:form.responsavel||null,created_at:new Date().toISOString()});
-    if(!error){onAdd({id,name:form.name,phone:form.phone,course:form.course,source:form.source,stage:"novo",notes:"",responsavel:form.responsavel,createdAt:new Date().toISOString(),history:[],followUp:null});onClose();}
+    const{error}=await supabase.from("leads").insert({id,name:form.name,phone:form.phone,course:form.course||null,source:form.source||null,stage:"novo",responsavel:form.responsavel||null,unit:form.unit||null,created_at:new Date().toISOString()});
+    if(!error){onAdd({id,name:form.name,phone:form.phone,course:form.course,source:form.source,stage:"novo",notes:"",responsavel:form.responsavel,unit:form.unit,createdAt:new Date().toISOString(),history:[],followUp:null});onClose();}
     else alert("Erro ao salvar.");
     setSaving(false);
   };
@@ -310,6 +386,17 @@ function QuickAddModal({onAdd,onClose,mob}) {
         <Sel label="Curso" value={form.course} onChange={e=>f("course",e.target.value)} options={[{value:"",label:"Selecione..."},...COURSES.map(c=>({value:c,label:c}))]}/>
         <Sel label="Origem" value={form.source} onChange={e=>f("source",e.target.value)} options={[{value:"",label:"Selecione..."},...SOURCES.map(s=>({value:s,label:s}))]}/>
         <Inp label="Responsável (opcional)" value={form.responsavel} onChange={e=>f("responsavel",e.target.value)} placeholder="Nome do responsável"/>
+        <div>
+          <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Unidade *</span>
+          <div style={{display:"flex",gap:8}}>
+            {UNITS.map(u=>(
+              <button key={u.id} type="button" onClick={()=>f("unit",u.id)} className="tap"
+                style={{flex:1,background:form.unit===u.id?u.color:"transparent",border:`1.5px solid ${form.unit===u.id?u.border:T.border}`,borderRadius:10,padding:"10px 8px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:form.unit===u.id?u.text:T.muted,transition:"all .15s"}}>
+                {u.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:4}}>
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn onClick={submit} loading={saving} full={mob}>➕ Adicionar ao Pipeline</Btn>
@@ -321,15 +408,15 @@ function QuickAddModal({onAdd,onClose,mob}) {
 
 /* ─── ADD LEAD FULL ──────────────────────────────────────────────── */
 function AddLeadModal({onAdd,onClose,mob}) {
-  const [form,setForm]=useState({name:"",phone:"",email:"",course:"",source:"",notes:"",stage:"novo",responsavel:""});
+  const [form,setForm]=useState({name:"",phone:"",email:"",course:"",source:"",notes:"",stage:"novo",responsavel:"",unit:""});
   const [saving,setSaving]=useState(false);
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const submit=async()=>{
     if(!form.name.trim()||!form.phone.trim()){alert("Nome e telefone são obrigatórios.");return;}
     setSaving(true);
     const id=uid();
-    const{error}=await supabase.from("leads").insert({id,name:form.name,phone:form.phone,email:form.email||null,course:form.course||null,source:form.source||null,stage:form.stage,notes:form.notes||null,responsavel:form.responsavel||null,created_at:new Date().toISOString()});
-    if(!error){onAdd({...form,id,createdAt:new Date().toISOString(),history:[],followUp:null});onClose();}
+    const{error}=await supabase.from("leads").insert({id,name:form.name,phone:form.phone,email:form.email||null,course:form.course||null,source:form.source||null,stage:form.stage,notes:form.notes||null,responsavel:form.responsavel||null,unit:form.unit||null,created_at:new Date().toISOString()});
+    if(!error){onAdd({...form,id,unit:form.unit,createdAt:new Date().toISOString(),history:[],followUp:null});onClose();}
     else alert("Erro ao salvar.");
     setSaving(false);
   };
@@ -344,6 +431,17 @@ function AddLeadModal({onAdd,onClose,mob}) {
           <Sel label="Origem" value={form.source} onChange={e=>f("source",e.target.value)} options={[{value:"",label:"Selecione..."},...SOURCES.map(s=>({value:s,label:s}))]}/>
         </div>
         <Inp label="Responsável (opcional)" value={form.responsavel} onChange={e=>f("responsavel",e.target.value)} placeholder="Nome do responsável"/>
+        <div>
+          <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Unidade *</span>
+          <div style={{display:"flex",gap:8}}>
+            {UNITS.map(u=>(
+              <button key={u.id} type="button" onClick={()=>f("unit",u.id)} className="tap"
+                style={{flex:1,background:form.unit===u.id?u.color:"transparent",border:`1.5px solid ${form.unit===u.id?u.border:T.border}`,borderRadius:10,padding:"10px 8px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:form.unit===u.id?u.text:T.muted,transition:"all .15s"}}>
+                {u.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <Sel label="Etapa inicial" value={form.stage} onChange={e=>f("stage",e.target.value)} options={STAGES.map(s=>({value:s.id,label:s.label}))}/>
         <Inp label="Observações" type="textarea" value={form.notes} onChange={e=>f("notes",e.target.value)}/>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
@@ -566,6 +664,7 @@ function AgendaCloser({leads,mob}) {
 function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const [dragOver,setDragOver]=useState(null);
   const [celebrating,setCelebrating]=useState(false);
+  const [reuniaoCelebrating,setReuniaoCelebrating]=useState(false);
   const [activeStage,setActiveStage]=useState("novo");
   const dragging=useRef(null);
   const ts=today();
@@ -574,11 +673,15 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
 
   const LeadCard=({lead,stage})=>{
     const isTd=lead.followUp?.date===ts,ov=lead.followUp?.date&&lead.followUp.date<ts;
+    const unit=UNITS.find(u=>u.id===lead.unit);
     return (
       <div draggable={!mob} onDragStart={()=>dragging.current=lead.id}
         onClick={()=>onSelect(lead)} className="c-hover"
-        style={{background:T.surface,borderRadius:10,padding:"12px 14px",border:`1px solid ${T.border}`,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.05)",borderTop:`2.5px solid ${stage.hex}`}}>
-        <div style={{fontWeight:600,fontSize:13,marginBottom:3}}>{lead.name}</div>
+        style={{background:unit?unit.color:T.surface,borderRadius:10,padding:"12px 14px",border:`1px solid ${unit?unit.border:T.border}`,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.05)",borderTop:`2.5px solid ${stage.hex}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
+          <div style={{fontWeight:600,fontSize:13}}>{lead.name}</div>
+          {unit&&<span style={{fontSize:9,fontWeight:700,color:unit.text,background:"rgba(255,255,255,.6)",borderRadius:5,padding:"2px 6px",flexShrink:0,marginLeft:4}}>{unit.label}</span>}
+        </div>
         <div style={{fontSize:11,color:T.muted,marginBottom:2}}>{lead.course||"—"}</div>
         {lead.responsavel&&<div style={{fontSize:11,color:T.accent,marginBottom:2}}>👤 {lead.responsavel}</div>}
         {stage.id==="listafria"&&<div style={{fontSize:10,color:"#7dd3fc",fontWeight:600,marginBottom:2}}>🧊 Retomar contato</div>}
@@ -593,6 +696,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
     return (
       <div style={{animation:"fadeUp .3s"}}>
         {celebrating&&<CashCelebration onDone={()=>setCelebrating(false)}/>}
+        {reuniaoCelebrating&&<ReuniaoCelebration onDone={()=>setReuniaoCelebrating(false)}/>}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <h1 style={{fontFamily:"'DM Serif Display',serif",fontSize:26,fontWeight:400}}>Pipeline</h1>
           <Btn onClick={onQuickAdd} style={{padding:"8px 14px",fontSize:13}}>⚡ Novo Lead</Btn>
@@ -616,12 +720,21 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   return (
     <div style={{animation:"fadeUp .3s"}}>
       {celebrating&&<CashCelebration onDone={()=>setCelebrating(false)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+      {reuniaoCelebrating&&<ReuniaoCelebration onDone={()=>setReuniaoCelebrating(false)}/>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
         <div>
           <h1 style={{fontFamily:"'DM Serif Display',serif",fontSize:32,fontWeight:400,letterSpacing:"-.5px"}}>Pipeline</h1>
           <p style={{color:T.muted,fontSize:14,marginTop:4}}>Arraste os cards entre as etapas</p>
         </div>
         <Btn onClick={onQuickAdd}>⚡ Novo Lead</Btn>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        {UNITS.map(u=>(
+          <div key={u.id} style={{background:u.color,border:`1px solid ${u.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:u.text,display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:u.text,opacity:.6}}/>
+            {u.label}
+          </div>
+        ))}
       </div>
       {/* SDR */}
       <div style={{marginBottom:12}}>
@@ -664,7 +777,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
                 onDragLeave={()=>setDragOver(null)}
-                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);onMove(dragging.current,stage.id);if(stage.id==="matriculado"&&prev?.stage!=="matriculado")setCelebrating(true);}setDragOver(null);dragging.current=null;}}
+                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);onMove(dragging.current,stage.id);if(stage.id==="matriculado"&&prev?.stage!=="matriculado")setCelebrating(true);if(stage.id==="reuniao"&&prev?.stage!=="reuniao")setReuniaoCelebrating(true);}setDragOver(null);dragging.current=null;}}
                 style={{minWidth:195,flex:"0 0 195px",background:over?stage.hex+"10":T.bg,border:`1.5px solid ${over?stage.hex:T.border}`,borderRadius:T.radius,padding:12,transition:"all .18s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
@@ -784,6 +897,7 @@ function LeadsList({leads,onSelect,onAdd,mob}) {
               </div>
               <div style={{fontSize:13,color:T.muted,marginBottom:2}}>📱 {lead.phone}</div>
               <div style={{fontSize:13,color:T.muted}}>📚 {lead.course||"—"} · {lead.source||"—"}</div>
+              {lead.unit&&(()=>{const u=UNITS.find(x=>x.id===lead.unit);return u?<span style={{display:"inline-block",fontSize:11,fontWeight:700,color:u.text,background:u.color,border:`1px solid ${u.border}`,borderRadius:6,padding:"2px 8px",marginTop:4,marginRight:4}}>{u.label}</span>:null;})()}
               {lead.responsavel&&<div style={{fontSize:12,color:T.accent,marginTop:4}}>👤 {lead.responsavel}</div>}
             </div>
           );})}
@@ -792,7 +906,7 @@ function LeadsList({leads,onSelect,onAdd,mob}) {
       ):(
         <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
-            <thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{["Nome","Telefone","Curso","Responsável","Origem","Etapa","Follow-up"].map(h=>(
+            <thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{["Nome","Telefone","Curso","Unidade","Responsável","Origem","Etapa","Follow-up"].map(h=>(
               <th key={h} style={{padding:"12px 16px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em"}}>{h}</th>
             ))}</tr></thead>
             <tbody>
@@ -801,13 +915,14 @@ function LeadsList({leads,onSelect,onAdd,mob}) {
                   <td style={{padding:"12px 16px",fontWeight:600}}>{lead.name}</td>
                   <td style={{padding:"12px 16px",color:T.muted}}>{lead.phone}</td>
                   <td style={{padding:"12px 16px",color:T.muted,fontSize:13}}>{lead.course||"—"}</td>
+                  <td style={{padding:"12px 16px"}}>{lead.unit?(()=>{const u=UNITS.find(x=>x.id===lead.unit);return u?<span style={{fontSize:11,fontWeight:700,color:u.text,background:u.color,border:`1px solid ${u.border}`,borderRadius:6,padding:"2px 8px"}}>{u.label}</span>:"—";})():"—"}</td>
                   <td style={{padding:"12px 16px",color:T.accent,fontSize:13}}>{lead.responsavel||"—"}</td>
                   <td style={{padding:"12px 16px",color:T.muted,fontSize:13}}>{lead.source||"—"}</td>
                   <td style={{padding:"12px 16px"}}><Pill color={st?.hex}>{st?.label}</Pill></td>
                   <td style={{padding:"12px 16px"}}>{lead.followUp?<span style={{fontSize:12,fontWeight:700,color:ov?"#dc2626":isTd?T.gold:T.muted}}>{ov?"⚠ ":isTd?"🔔 ":""}{lead.followUp.date}</span>:<span style={{color:T.muted,fontSize:13}}>—</span>}</td>
                 </tr>
               );})}
-              {filtered.length===0&&<tr><td colSpan={7} style={{padding:"48px 0",textAlign:"center",color:T.muted}}>Nenhum lead encontrado.</td></tr>}
+              {filtered.length===0&&<tr><td colSpan={8} style={{padding:"48px 0",textAlign:"center",color:T.muted}}>Nenhum lead encontrado.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -924,7 +1039,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const ts=today(),st=STAGES.find(s=>s.id===lead.stage);
 
-  const saveInfo=async()=>{setSaving(true);await supabase.from("leads").update({name:form.name,phone:form.phone,email:form.email,course:form.course,source:form.source,notes:form.notes,responsavel:form.responsavel||null}).eq("id",lead.id);onUpdate({...lead,...form});setEditing(false);setSaving(false);};
+  const saveInfo=async()=>{setSaving(true);await supabase.from("leads").update({name:form.name,phone:form.phone,email:form.email,course:form.course,source:form.source,notes:form.notes,responsavel:form.responsavel||null,unit:form.unit||null}).eq("id",lead.id);onUpdate({...lead,...form});setEditing(false);setSaving(false);};
   const changeStage=async(id)=>{await supabase.from("leads").update({stage:id}).eq("id",lead.id);onUpdate({...lead,stage:id});};
   const addHist=async()=>{if(!hist.note.trim())return;const entry={id:uid(),lead_id:lead.id,type:hist.type,note:hist.note,date:new Date().toISOString()};await supabase.from("lead_history").insert(entry);onUpdate({...lead,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});setHist({type:"WhatsApp",note:""});};
   const saveFu=async()=>{await supabase.from("leads").update({follow_up_date:fu.date||null,follow_up_note:fu.note||null}).eq("id",lead.id);onUpdate({...lead,followUp:fu.date?{...fu}:null});};
@@ -967,7 +1082,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
       ):(
         <div style={{display:"grid",gap:12}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {[["Nome",lead.name],["Telefone",lead.phone],["Email",lead.email||"—"],["Curso",lead.course||"—"],["Origem",lead.source||"—"],["Responsável",lead.responsavel||"—"]].map(([l,v])=>(
+            {[["Nome",lead.name],["Telefone",lead.phone],["Email",lead.email||"—"],["Curso",lead.course||"—"],["Unidade",UNITS.find(u=>u.id===lead.unit)?.label||"—"],["Origem",lead.source||"—"],["Responsável",lead.responsavel||"—"]].map(([l,v])=>(
               <div key={l} style={{background:T.bg,borderRadius:10,padding:"11px 14px"}}>
                 <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:3}}>{l}</div>
                 <div style={{fontWeight:600,fontSize:14,wordBreak:"break-word"}}>{v}</div>
