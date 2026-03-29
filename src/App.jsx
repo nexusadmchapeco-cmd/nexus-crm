@@ -677,7 +677,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
     return (
       <div draggable={!mob} onDragStart={()=>dragging.current=lead.id}
         onClick={()=>onSelect(lead)} className="c-hover"
-        style={{background:unit?unit.color:T.surface,borderRadius:10,padding:"12px 14px",border:`1px solid ${unit?unit.border:T.border}`,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.05)",borderTop:`2.5px solid ${stage.hex}`}}>
+        style={{background:unit?unit.color:T.surface,borderRadius:10,padding:"12px 14px",border:`1px solid ${unit?unit.border:T.border}`,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.05)",borderTop:`3px solid ${stage.hex}`,outline:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
           <div style={{fontWeight:600,fontSize:13}}>{lead.name}</div>
           {unit&&<span style={{fontSize:9,fontWeight:700,color:unit.text,background:"rgba(255,255,255,.6)",borderRadius:5,padding:"2px 6px",flexShrink:0,marginLeft:4}}>{unit.label}</span>}
