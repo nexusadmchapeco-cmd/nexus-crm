@@ -174,7 +174,7 @@ function LoginScreen() {
       <div style={{width:"100%",maxWidth:420,animation:"fadeUp .4s"}}>
         <div style={{textAlign:"center",marginBottom:36}}>
           <div style={{background:"#ffffff",borderRadius:18,padding:"18px 32px",display:"inline-block",boxShadow:"0 8px 40px rgba(0,0,0,.35)",marginBottom:20}}>
-            <img src={LOGO} alt="Nexus English Center" style={{height:52,objectFit:"contain",display:"block",filter:"brightness(0) invert(1)"}}/>
+            <img src={LOGO} alt="Nexus English Center" style={{height:52,objectFit:"contain",display:"block"}}/>
           </div>
           <div style={{color:"rgba(255,255,255,.35)",fontSize:12,letterSpacing:".1em",textTransform:"uppercase",fontWeight:600}}>Portal Comercial</div>
         </div>
