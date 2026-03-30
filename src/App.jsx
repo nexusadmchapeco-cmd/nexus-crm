@@ -1156,7 +1156,7 @@ function Sidebar({active,onChange,fuCount,onLogout,userEmail}) {
       <div style={{padding:"24px 20px 16px"}}>
         <div style={{marginBottom:28,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)"}}>
           <div style={{background:"#ffffff",borderRadius:12,padding:"10px 14px",display:"inline-block"}}>
-            <img src={LOGO} alt="Nexus" style={{height:36,objectFit:"contain",display:"block",filter:"brightness(0) invert(1)"}}/>
+            <img src={LOGO} alt="Nexus" style={{height:36,objectFit:"contain",display:"block"}}/>
           </div>
         </div>
         <nav style={{display:"flex",flexDirection:"column",gap:3}}>
