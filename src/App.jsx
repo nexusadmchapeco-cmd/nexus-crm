@@ -1218,7 +1218,7 @@ export default function App() {
       const{data:hd}=await supabase.from("lead_history").select("*").order("date",{ascending:false});
       setLeads((ld||[]).map(l=>({
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
-        stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",createdAt:l.created_at,
+        stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,
         followUp:l.follow_up_date?{date:l.follow_up_date,note:l.follow_up_note||""}:null,
         history:(hd||[]).filter(h=>h.lead_id===l.id).map(h=>({id:h.id,type:h.type,note:h.note,date:h.date})),
       })));
