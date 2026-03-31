@@ -33,6 +33,7 @@ const UNITS = [
 const NAV_ITEMS = [
   { id:"pipeline",   icon:"◫", label:"Pipeline"  },
   { id:"agenda",     icon:"📅", label:"Agenda"    },
+  { id:"whatsapp",   icon:"💬", label:"WhatsApp"  },
   { id:"dashboard",  icon:"⬡", label:"Dashboard" },
   { id:"leads",      icon:"◎", label:"Leads"     },
   { id:"followups",  icon:"◷", label:"Follow-up" },
@@ -689,6 +690,128 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
   );
 }
 
+/* ─── WHATSAPP INBOX ────────────────────────────────────────────── */
+function WhatsAppInbox({leads, mob, onSelectLead}) {
+  const [msgs, setMsgs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPhone, setSelectedPhone] = useState(null);
+
+  useEffect(()=>{ loadConversations(); const iv=setInterval(loadConversations,10000); return()=>clearInterval(iv); },[]);
+
+  const loadConversations = async () => {
+    const { data } = await supabase.from("whatsapp_messages").select("*").order("timestamp",{ascending:false});
+    setMsgs(data||[]);
+    setLoading(false);
+  };
+
+  // Group by phone
+  const conversations = {};
+  msgs.forEach(m=>{
+    if(!conversations[m.phone]){
+      const lead = leads.find(l=>l.phone.replace(/\D/g,"").slice(-9)===m.phone.slice(-9));
+      conversations[m.phone]={phone:m.phone,lead,messages:[],unread:0,lastMsg:m,lastTime:m.timestamp};
+    }
+    conversations[m.phone].messages.push(m);
+    if(!m.read&&m.direction==="in") conversations[m.phone].unread++;
+  });
+
+  const convList = Object.values(conversations).sort((a,b)=>new Date(b.lastTime)-new Date(a.lastTime));
+  const selected = selectedPhone ? conversations[selectedPhone] : null;
+
+  const markRead = async (phone) => {
+    const lead = leads.find(l=>l.phone.replace(/\D/g,"").slice(-9)===phone.slice(-9));
+    if(lead) await supabase.from("whatsapp_messages").update({read:true}).eq("lead_id",lead.id).eq("direction","in").eq("read",false);
+  };
+
+  const openChat = (phone) => { setSelectedPhone(phone); markRead(phone); };
+
+  const totalUnread = convList.reduce((sum,c)=>sum+c.unread,0);
+
+  return (
+    <div style={{animation:"fadeUp .3s"}}>
+      <div style={{marginBottom:20}}>
+        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:700,letterSpacing:"-.5px"}}>
+          WhatsApp {totalUnread>0&&<span style={{fontSize:16,fontWeight:700,color:"white",background:"#25d366",borderRadius:20,padding:"3px 12px",marginLeft:8,verticalAlign:"middle"}}>{totalUnread}</span>}
+        </h1>
+        <p style={{color:T.muted,fontSize:13,marginTop:4}}>Histórico de conversas dos leads</p>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":selectedPhone?"320px 1fr":"1fr",gap:16,height:mob?"auto":"calc(100vh - 180px)"}}>
+        {/* Conversation list */}
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+          <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,fontSize:12,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em"}}>
+            {convList.length} conversa(s)
+          </div>
+          <div style={{overflowY:"auto",flex:1}}>
+            {loading?<div style={{textAlign:"center",padding:32}}><Spinner/></div>
+            :convList.length===0?<div style={{textAlign:"center",padding:40,color:T.muted,fontSize:14}}>Nenhuma conversa ainda.</div>
+            :convList.map(conv=>{
+              const isSelected=selectedPhone===conv.phone;
+              const lastMsg=conv.messages[0];
+              return (
+                <div key={conv.phone} onClick={()=>openChat(conv.phone)}
+                  style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`,cursor:"pointer",background:isSelected?T.accentLight:"transparent",transition:"background .15s"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                    <div style={{fontWeight:700,fontSize:14,color:T.text}}>{conv.lead?.name||conv.phone}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      {conv.unread>0&&<span style={{background:"#25d366",color:"white",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:700}}>{conv.unread}</span>}
+                      <span style={{fontSize:11,color:T.muted}}>{new Date(conv.lastTime).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span>
+                    </div>
+                  </div>
+                  <div style={{fontSize:12,color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {lastMsg?.direction==="out"?"✓ ":""}{lastMsg?.message||""}
+                  </div>
+                  {conv.lead&&<div style={{marginTop:4}}><Pill color={STAGES.find(s=>s.id===conv.lead.stage)?.hex||T.muted}>{STAGES.find(s=>s.id===conv.lead.stage)?.label||"—"}</Pill></div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Chat window */}
+        {selected&&!mob&&(
+          <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            {/* Chat header */}
+            <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:16}}>{selected.lead?.name||selected.phone}</div>
+                <div style={{fontSize:12,color:T.muted}}>{selected.phone}</div>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {selected.lead&&<button onClick={()=>onSelectLead(selected.lead)} className="tap gh" style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",fontSize:12,color:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Ver lead</button>}
+                <button onClick={()=>{const p=selected.phone.startsWith("55")?selected.phone:`55${selected.phone}`;window.open(`https://wa.me/${p}`,"_blank");}} className="tap"
+                  style={{background:"#25d366",color:"white",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  📱 Abrir WhatsApp
+                </button>
+              </div>
+            </div>
+            {/* Messages */}
+            <div style={{flex:1,overflowY:"auto",padding:"16px",display:"flex",flexDirection:"column",gap:8,background:"#f9f9f7"}}>
+              {[...selected.messages].reverse().map(m=>{
+                const isOut=m.direction==="out";
+                return (
+                  <div key={m.id} style={{display:"flex",justifyContent:isOut?"flex-end":"flex-start"}}>
+                    <div style={{maxWidth:"70%",background:isOut?"#e85d20":"white",color:isOut?"white":"#111",borderRadius:isOut?"14px 14px 2px 14px":"14px 14px 14px 2px",padding:"9px 13px",fontSize:13,lineHeight:1.4,boxShadow:"0 1px 3px rgba(0,0,0,.08)"}}>
+                      <div style={{wordBreak:"break-word"}}>{m.message}</div>
+                      <div style={{fontSize:10,opacity:.65,marginTop:4,textAlign:"right"}}>
+                        {new Date(m.timestamp).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})} {isOut?"✓✓":""}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Footer */}
+            <div style={{padding:"12px 16px",borderTop:`1px solid ${T.border}`,background:T.surface,fontSize:12,color:T.muted,textAlign:"center"}}>
+              Responda pelo WhatsApp no celular 📱
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── KANBAN ─────────────────────────────────────────────────────── */
 function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const [dragOver,setDragOver]=useState(null);
@@ -1282,6 +1405,7 @@ function Sidebar({active,onChange,fuCount,onLogout,userEmail}) {
               style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:"none",borderLeft:on?"3px solid #e85d20":"3px solid transparent",background:on?"rgba(232,93,32,.12)":"transparent",color:on?"#e85d20":"rgba(255,255,255,.5)",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:on?700:500,textAlign:"left",transition:"all .15s"}}>
               <span style={{fontSize:16}}>{item.icon}</span>{item.label}
               {item.id==="followups"&&fuCount>0&&<span style={{marginLeft:"auto",background:T.gold,color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{fuCount}</span>}
+              {item.id==="whatsapp"&&waUnreadTotal>0&&<span style={{marginLeft:"auto",background:"#25d366",color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{waUnreadTotal}</span>}
             </button>
           );})}
         </nav>
@@ -1355,6 +1479,7 @@ export default function App() {
   const logout=()=>supabase.auth.signOut();
   const ts=today();
   const fuCount=leads.filter(l=>l.followUp?.date&&l.followUp.date<=ts).length;
+  const waUnreadTotal=leads.reduce((sum,l)=>sum+(l.unreadCount||0),0);
 
   if(authLoading)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.bg}}><Spinner/></div>);
   if(!session)return(<><GlobalStyles/><LoginScreen/></>);
@@ -1378,6 +1503,7 @@ export default function App() {
           ):(
             <>
               {page==="pipeline"   &&<KanbanBoard leads={leads} onSelect={setSelected} onMove={moveLead} onQuickAdd={()=>setShowQuick(true)} mob={mob}/>}
+              {page==="whatsapp"   &&<WhatsAppInbox leads={leads} mob={mob} onSelectLead={l=>{setSelected(l);}}/>}
               {page==="agenda"     &&<AgendaCloser leads={leads} mob={mob}/>}
               {page==="dashboard"  &&<Dashboard leads={leads} mob={mob}/>}
               {page==="leads"      &&<LeadsList leads={leads} onSelect={setSelected} onAdd={()=>setShowAdd(true)} mob={mob}/>}
