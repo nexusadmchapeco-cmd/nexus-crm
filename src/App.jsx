@@ -708,7 +708,7 @@ function WhatsAppInbox({leads, mob, onSelectLead}) {
   const conversations = {};
   msgs.forEach(m=>{
     if(!conversations[m.phone]){
-      const lead = leads.find(l=>l.phone.replace(/\D/g,"").slice(-9)===m.phone.slice(-9));
+      const lead = leads.find(l=>l.phone.replace(/[^0-9]/g,"").slice(-9)===m.phone.slice(-9));
       conversations[m.phone]={phone:m.phone,lead,messages:[],unread:0,lastMsg:m,lastTime:m.timestamp};
     }
     conversations[m.phone].messages.push(m);
@@ -719,7 +719,7 @@ function WhatsAppInbox({leads, mob, onSelectLead}) {
   const selected = selectedPhone ? conversations[selectedPhone] : null;
 
   const markRead = async (phone) => {
-    const lead = leads.find(l=>l.phone.replace(/\D/g,"").slice(-9)===phone.slice(-9));
+    const lead = leads.find(l=>l.phone.replace(/[^0-9]/g,"").slice(-9)===phone.slice(-9));
     if(lead) await supabase.from("whatsapp_messages").update({read:true}).eq("lead_id",lead.id).eq("direction","in").eq("read",false);
   };
 
@@ -1198,7 +1198,7 @@ function WhatsAppTab({lead, mob}) {
   },[lead.id]);
 
   const loadMsgs = async () => {
-    const cleanPhone = lead.phone.replace(/\D/g,"").slice(-9);
+    const cleanPhone = lead.phone.replace(/[^0-9]/g,"").slice(-9);
     const { data } = await supabase
       .from("whatsapp_messages")
       .select("*")
