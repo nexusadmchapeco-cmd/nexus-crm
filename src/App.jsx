@@ -1215,7 +1215,7 @@ function WhatsAppTab({lead, mob}) {
   };
 
   const openWhatsApp = () => {
-    const phone = lead.phone.replace(/\D/g,"");
+    const phone = lead.phone.replace(/[^0-9]/g,"");
     const num = phone.startsWith("55") ? phone : `55${phone}`;
     window.open(`https://wa.me/${num}`,"_blank");
   };
@@ -1390,7 +1390,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
 }
 
 /* ─── SIDEBAR ────────────────────────────────────────────────────── */
-function Sidebar({active,onChange,fuCount,onLogout,userEmail}) {
+function Sidebar({active,onChange,fuCount,waUnread,onLogout,userEmail}) {
   return (
     <aside style={{width:220,background:"#111111",display:"flex",flexDirection:"column",height:"100vh",position:"sticky",top:0,flexShrink:0}}>
       <div style={{padding:"24px 20px 16px"}}>
@@ -1405,7 +1405,7 @@ function Sidebar({active,onChange,fuCount,onLogout,userEmail}) {
               style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:"none",borderLeft:on?"3px solid #e85d20":"3px solid transparent",background:on?"rgba(232,93,32,.12)":"transparent",color:on?"#e85d20":"rgba(255,255,255,.5)",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:on?700:500,textAlign:"left",transition:"all .15s"}}>
               <span style={{fontSize:16}}>{item.icon}</span>{item.label}
               {item.id==="followups"&&fuCount>0&&<span style={{marginLeft:"auto",background:T.gold,color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{fuCount}</span>}
-              {item.id==="whatsapp"&&waUnreadTotal>0&&<span style={{marginLeft:"auto",background:"#25d366",color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{waUnreadTotal}</span>}
+              {item.id==="whatsapp"&&waUnread>0&&<span style={{marginLeft:"auto",background:"#25d366",color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{waUnread}</span>}
             </button>
           );})}
         </nav>
@@ -1417,7 +1417,7 @@ function Sidebar({active,onChange,fuCount,onLogout,userEmail}) {
     </aside>
   );
 }
-function BottomNav({active,onChange,fuCount}) {
+function BottomNav({active,onChange,fuCount,waUnread}) {
   return (
     <nav style={{position:"fixed",bottom:0,left:0,right:0,background:"#111111",borderTop:"1px solid rgba(255,255,255,.06)",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)",boxShadow:"0 -4px 20px rgba(0,0,0,.2)"}}>
       {NAV_ITEMS.map(item=>{const on=active===item.id;return(
@@ -1426,6 +1426,7 @@ function BottomNav({active,onChange,fuCount}) {
           <span style={{fontSize:18,lineHeight:1}}>{item.icon}</span>
           {item.label}
           {item.id==="followups"&&fuCount>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 18px)",background:T.gold,color:"white",borderRadius:10,padding:"0 5px",fontSize:9,fontWeight:700,lineHeight:"16px"}}>{fuCount}</span>}
+          {item.id==="whatsapp"&&waUnread>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 18px)",background:"#25d366",color:"white",borderRadius:10,padding:"0 5px",fontSize:9,fontWeight:700,lineHeight:"16px"}}>{waUnread}</span>}
         </button>
       );})}
     </nav>
@@ -1488,7 +1489,7 @@ export default function App() {
     <>
       <GlobalStyles/>
       <div style={{display:"flex",minHeight:"100vh"}}>
-        {!mob&&<Sidebar active={page} onChange={nav} fuCount={fuCount} onLogout={logout} userEmail={session.user.email}/>}
+        {!mob&&<Sidebar active={page} onChange={nav} fuCount={fuCount} waUnread={waUnreadTotal} onLogout={logout} userEmail={session.user.email}/>}
         <main style={{flex:1,padding:mob?"18px 16px 90px":"36px 40px",overflowY:"auto",minHeight:"100vh"}}>
           {mob&&(
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
@@ -1513,7 +1514,7 @@ export default function App() {
           )}
         </main>
       </div>
-      {mob&&<BottomNav active={page} onChange={nav} fuCount={fuCount}/>}
+      {mob&&<BottomNav active={page} onChange={nav} fuCount={fuCount} waUnread={waUnreadTotal}/>}
       {mob&&<FAB onClick={()=>setShowQuick(true)}/>}
       {showQuick&&<QuickAddModal onAdd={addLead} onClose={()=>setShowQuick(false)} mob={mob}/>}
       {showAdd  &&<AddLeadModal  onAdd={addLead} onClose={()=>setShowAdd(false)} mob={mob}/>}
