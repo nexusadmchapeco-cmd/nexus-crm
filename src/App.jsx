@@ -500,9 +500,28 @@ function AgendaCloser({leads,mob}) {
     const{date,time}=bookModal;
     const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado"});
     if(!error){
-      // Move lead to "reuniao" stage
       await supabase.from("leads").update({stage:"reuniao"}).eq("id",bookForm.lead_id);
       await loadData();
+      // Send WhatsApp notification to closer
+      const lead=leads.find(l=>l.id===bookForm.lead_id);
+      const isPF=lead?.unit==="pf";
+      const closerPhone=isPF?"5554999658474":"5549988971344";
+      const dateFormatted=new Date(date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
+      const msg=`🗓 *Nova reunião agendada!*
+
+👤 *Lead:* ${lead?.name||"—"}
+📱 *Telefone:* ${lead?.phone||"—"}
+📚 *Curso:* ${lead?.course||"—"}
+🏫 *Unidade:* ${lead?.unit==="pf"?"Nexus PF":lead?.unit==="chape"?"Nexus Chapecó":"Nexus Online"}
+
+📅 *Data:* ${dateFormatted}
+🕐 *Horário:* ${time} – ${addMinutes(time,30)}
+
+${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
+
+`:""}Reunião cadastrada no CRM ✅`;
+      const waUrl=`https://wa.me/${closerPhone}?text=${encodeURIComponent(msg)}`;
+      window.open(waUrl,"_blank");
       setBookModal(null);setBookForm({lead_id:"",notes:""});
     } else alert("Erro ao agendar.");
     setSaving(false);
