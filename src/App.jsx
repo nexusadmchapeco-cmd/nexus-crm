@@ -1209,6 +1209,14 @@ function WhatsAppTab({lead, mob}) {
       .select("*")
       .or(`lead_id.eq.${lead.id},phone.ilike.%${cleanPhone}%`)
       .order("timestamp", {ascending: true});
+    // Also fix lead_id for messages that matched by phone but have no lead_id
+    if (data && data.length > 0) {
+      const unlinked = data.filter(m => !m.lead_id);
+      if (unlinked.length > 0) {
+        await supabase.from("whatsapp_messages").update({lead_id: lead.id})
+          .ilike("phone", `%${cleanPhone}%`).is("lead_id", null);
+      }
+    }
     setMsgs(data||[]);
     setUnread((data||[]).filter(m=>!m.read&&m.direction==="in").length);
     // Mark as read
@@ -1282,7 +1290,7 @@ function WhatsAppTab({lead, mob}) {
 /* ─── LEAD MODAL ─────────────────────────────────────────────────── */
 function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [tab,setTab]=useState("info"),[editing,setEditing]=useState(!lead.unit);
-  const [form,setForm]=useState({...lead});
+  const [form,setForm]=useState({...lead, unit:lead.unit||''});
   const [hist,setHist]=useState({type:"WhatsApp",note:""});
   const [fu,setFu]=useState(lead.followUp||{date:"",note:""});
   const [saving,setSaving]=useState(false);
