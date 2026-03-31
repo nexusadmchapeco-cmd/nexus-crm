@@ -36,7 +36,7 @@ const NAV_ITEMS = [
   { id:"relatorios", icon:"◈", label:"Relatórios"},
 ];
 
-const HOURS = ["08:00","08:35","09:10","09:45","10:20","11:00","11:35","12:10","12:45","13:20","14:00","14:35","15:10","15:45","16:20","17:00","17:35","18:10","18:45","19:20","20:00","20:25","21:00"];
+const HOURS = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00"];
 const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -540,7 +540,7 @@ function AgendaCloser({leads,mob}) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:10}}>
         <div>
           <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?24:30,fontWeight:400,letterSpacing:"-.5px"}}>Agenda</h1>
-          <p style={{color:T.muted,fontSize:13,marginTop:3}}>Reuniões de fechamento · 35 min cada</p>
+          <p style={{color:T.muted,fontSize:13,marginTop:3}}>Reuniões de fechamento · 30 min cada</p>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <button onClick={()=>setBlockMode(b=>!b)} className="tap"
@@ -558,7 +558,7 @@ function AgendaCloser({leads,mob}) {
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {todaySlots.map(s=>{const lead=leads.find(l=>l.id===s.lead_id);return(
               <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
-                <span style={{fontWeight:700,color:T.accent}}>{s.time}–{addMinutes(s.time,35)}</span>
+                <span style={{fontWeight:700,color:T.accent}}>{s.time}–{addMinutes(s.time,30)}</span>
                 <span style={{fontWeight:600}}>{lead?.name||"—"}</span>
                 <span style={{color:T.muted}}>{lead?.course||"—"}</span>
                 <Pill color={statusColor[s.status]||T.muted}>{s.status}</Pill>
@@ -628,7 +628,7 @@ function AgendaCloser({leads,mob}) {
                     {slot&&(
                       <div style={{fontSize:11,background:statusColor[slot.status]||T.accent,color:"white",borderRadius:6,padding:"4px 6px",lineHeight:1.3}}>
                         <div style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead?.name||"Lead"}</div>
-                        <div style={{opacity:.85,fontSize:10}}>{hour}–{addMinutes(hour,35)}</div>
+                        <div style={{opacity:.85,fontSize:10}}>{hour}–{addMinutes(hour,30)}</div>
                         <div style={{display:"flex",gap:4,marginTop:4}}>
                           {slot.status==="agendado"&&<>
                             <button onClick={e=>{e.stopPropagation();confirmarSlot(slot.id);}} className="tap" style={{background:"rgba(255,255,255,.25)",border:"none",borderRadius:4,padding:"2px 5px",fontSize:10,fontWeight:700,cursor:"pointer",color:"white"}}>✓</button>
@@ -648,13 +648,13 @@ function AgendaCloser({leads,mob}) {
 
       {/* Book modal */}
       {bookModal&&(
-        <Modal title={`Agendar Reunião`} subtitle={`${new Date(bookModal.date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})} · ${bookModal.time} – ${addMinutes(bookModal.time,35)} (35 min)`} onClose={()=>setBookModal(null)} mob={mob} width={460}>
+        <Modal title={`Agendar Reunião`} subtitle={`${new Date(bookModal.date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})} · ${bookModal.time} – ${addMinutes(bookModal.time,30)} (30 min)`} onClose={()=>setBookModal(null)} mob={mob} width={460}>
           <div style={{display:"grid",gap:13}}>
             <Sel label="Lead *" value={bookForm.lead_id} onChange={e=>setBookForm(p=>({...p,lead_id:e.target.value}))}
               options={[{value:"",label:"Selecione o lead..."},...availLeads.map(l=>({value:l.id,label:`${l.name} — ${STAGES.find(s=>s.id===l.stage)?.label||""}`}))]}/>
             <Inp label="Observações (opcional)" type="textarea" value={bookForm.notes} onChange={e=>setBookForm(p=>({...p,notes:e.target.value}))} placeholder="Interesse, objeções, pontos importantes..."/>
             <div style={{background:T.accentLight,borderRadius:10,padding:"10px 14px",fontSize:13,color:T.accent,fontWeight:600}}>
-              📅 {new Date(bookModal.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})} · {bookModal.time} – {addMinutes(bookModal.time,35)} · 35 minutos
+              📅 {new Date(bookModal.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})} · {bookModal.time} – {addMinutes(bookModal.time,30)} · 30 minutos
             </div>
             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
               <Btn variant="ghost" onClick={()=>setBookModal(null)}>Cancelar</Btn>
