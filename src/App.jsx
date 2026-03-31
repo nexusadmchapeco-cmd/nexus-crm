@@ -704,26 +704,31 @@ function WhatsAppInbox({leads, mob, onSelectLead}) {
     setLoading(false);
   };
 
-  // Group by phone
+  // Group by last 9 digits of phone (normalize different formats)
   const conversations = {};
   msgs.forEach(m=>{
-    if(!conversations[m.phone]){
-      const lead = leads.find(l=>l.phone.replace(/[^0-9]/g,"").slice(-9)===m.phone.slice(-9));
-      conversations[m.phone]={phone:m.phone,lead,messages:[],unread:0,lastMsg:m,lastTime:m.timestamp};
+    const key = m.phone.replace(/[^0-9]/g,"").slice(-9);
+    if(!conversations[key]){
+      const lead = leads.find(l=>l.phone.replace(/[^0-9]/g,"").slice(-9)===key);
+      conversations[key]={phone:m.phone,key,lead,messages:[],unread:0,lastMsg:m,lastTime:m.timestamp};
     }
-    conversations[m.phone].messages.push(m);
-    if(!m.read&&m.direction==="in") conversations[m.phone].unread++;
+    conversations[key].messages.push(m);
+    if(new Date(m.timestamp)>new Date(conversations[key].lastTime)){
+      conversations[key].lastTime=m.timestamp;
+      conversations[key].lastMsg=m;
+    }
+    if(!m.read&&m.direction==="in") conversations[key].unread++;
   });
 
   const convList = Object.values(conversations).sort((a,b)=>new Date(b.lastTime)-new Date(a.lastTime));
   const selected = selectedPhone ? conversations[selectedPhone] : null;
 
-  const markRead = async (phone) => {
-    const lead = leads.find(l=>l.phone.replace(/[^0-9]/g,"").slice(-9)===phone.slice(-9));
+  const markRead = async (key) => {
+    const lead = leads.find(l=>l.phone.replace(/[^0-9]/g,"").slice(-9)===key);
     if(lead) await supabase.from("whatsapp_messages").update({read:true}).eq("lead_id",lead.id).eq("direction","in").eq("read",false);
   };
 
-  const openChat = (phone) => { setSelectedPhone(phone); markRead(phone); };
+  const openChat = (key) => { setSelectedPhone(key); markRead(key); };
 
   const totalUnread = convList.reduce((sum,c)=>sum+c.unread,0);
 
@@ -746,10 +751,10 @@ function WhatsAppInbox({leads, mob, onSelectLead}) {
             {loading?<div style={{textAlign:"center",padding:32}}><Spinner/></div>
             :convList.length===0?<div style={{textAlign:"center",padding:40,color:T.muted,fontSize:14}}>Nenhuma conversa ainda.</div>
             :convList.map(conv=>{
-              const isSelected=selectedPhone===conv.phone;
+              const isSelected=selectedPhone===conv.key;
               const lastMsg=conv.messages[0];
               return (
-                <div key={conv.phone} onClick={()=>openChat(conv.phone)}
+                <div key={conv.phone} onClick={()=>openChat(conv.key)}
                   style={{padding:"14px 16px",borderBottom:`1px solid ${T.border}`,cursor:"pointer",background:isSelected?T.accentLight:"transparent",transition:"background .15s"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                     <div style={{fontWeight:700,fontSize:14,color:T.text}}>{conv.lead?.name||conv.phone}</div>
