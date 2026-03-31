@@ -4,6 +4,9 @@ import { createClient } from "@supabase/supabase-js";
 const SUPA_URL = "https://tmkjtyhybfbaqcqovuem.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRta2p0eWh5YmZiYXFjcW92dWVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDY5MjYsImV4cCI6MjA5MDEyMjkyNn0.ZqBH1WkFsXREV9oaDotWkC9kVNt1bA_ERjEZTNjeWO0";
 const supabase = createClient(SUPA_URL, SUPA_KEY);
+const ZAPI_INSTANCE = "3F0F2B7CCECF710C472AB252550E5DC7";
+const ZAPI_TOKEN    = "BE18ADD41E82765B8E67964C";
+const ZAPI_CLIENT   = "Fddcba541ce4d42938750ece9472eaa38S";
 const LOGO = "/logo.svg";
 
 const STAGES = [
@@ -706,7 +709,10 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         style={{background:unit?unit.color:T.surface,borderRadius:10,padding:"12px 14px",border:`1px solid ${unit?unit.border:T.border}`,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.05)",borderTop:`3px solid ${stage.hex}`,outline:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
           <div style={{fontWeight:600,fontSize:13}}>{lead.name}</div>
-          {unit&&<span style={{fontSize:9,fontWeight:700,color:unit.text,background:"rgba(255,255,255,.6)",borderRadius:5,padding:"2px 6px",flexShrink:0,marginLeft:4}}>{unit.label}</span>}
+          <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0,marginLeft:4}}>
+            {lead.unreadCount>0&&<span style={{fontSize:9,fontWeight:800,color:"white",background:"#25d366",borderRadius:10,padding:"2px 6px",minWidth:16,textAlign:"center"}}>💬 {lead.unreadCount}</span>}
+            {unit&&<span style={{fontSize:9,fontWeight:700,color:unit.text,background:"rgba(255,255,255,.6)",borderRadius:5,padding:"2px 6px"}}>{unit.label}</span>}
+          </div>
         </div>
         <div style={{fontSize:11,color:T.muted,marginBottom:2}}>{lead.course||"—"}</div>
         {lead.responsavel&&<div style={{fontSize:11,color:T.accent,marginBottom:2}}>👤 {lead.responsavel}</div>}
@@ -1055,6 +1061,96 @@ function Relatorios({leads,mob}) {
   );
 }
 
+/* ─── WHATSAPP TAB ───────────────────────────────────────────────── */
+function WhatsAppTab({lead, mob}) {
+  const [msgs, setMsgs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [unread, setUnread] = useState(0);
+
+  useEffect(()=>{
+    loadMsgs();
+    // Poll every 10 seconds for new messages
+    const interval = setInterval(loadMsgs, 10000);
+    return () => clearInterval(interval);
+  },[lead.id]);
+
+  const loadMsgs = async () => {
+    const cleanPhone = lead.phone.replace(/\D/g,"").slice(-9);
+    const { data } = await supabase
+      .from("whatsapp_messages")
+      .select("*")
+      .or(`lead_id.eq.${lead.id},phone.ilike.%${cleanPhone}%`)
+      .order("timestamp", {ascending: true});
+    setMsgs(data||[]);
+    setUnread((data||[]).filter(m=>!m.read&&m.direction==="in").length);
+    // Mark as read
+    if (data && data.some(m=>!m.read&&m.direction==="in")) {
+      await supabase.from("whatsapp_messages").update({read:true})
+        .eq("lead_id", lead.id).eq("direction","in").eq("read",false);
+    }
+    setLoading(false);
+  };
+
+  const openWhatsApp = () => {
+    const phone = lead.phone.replace(/\D/g,"");
+    const num = phone.startsWith("55") ? phone : `55${phone}`;
+    window.open(`https://wa.me/${num}`,"_blank");
+  };
+
+  if (loading) return <div style={{textAlign:"center",padding:32}}><Spinner/></div>;
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{fontSize:13,color:T.muted}}>{msgs.length} mensagens · {lead.phone}</div>
+        <button onClick={openWhatsApp} className="tap"
+          style={{background:"#25d366",color:"white",border:"none",borderRadius:10,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}>
+          📱 Abrir no WhatsApp
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:360,overflowY:"auto",padding:"4px 0"}}>
+        {msgs.length===0 ? (
+          <div style={{textAlign:"center",color:T.muted,padding:"40px 0",fontSize:14}}>
+            <div style={{fontSize:32,marginBottom:8}}>💬</div>
+            Nenhuma mensagem ainda.<br/>
+            <span style={{fontSize:12}}>As mensagens aparecerão aqui automaticamente.</span>
+          </div>
+        ) : msgs.map(m=>{
+          const isOut = m.direction==="out";
+          const time = new Date(m.timestamp).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+          const date = new Date(m.timestamp).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
+          return (
+            <div key={m.id} style={{display:"flex",justifyContent:isOut?"flex-end":"flex-start"}}>
+              <div style={{
+                maxWidth:"75%",background:isOut?"#e85d20":"#f0f0f0",
+                color:isOut?"white":"#111",borderRadius:isOut?"14px 14px 2px 14px":"14px 14px 14px 2px",
+                padding:"9px 12px",fontSize:13,lineHeight:1.4,
+                boxShadow:"0 1px 3px rgba(0,0,0,.1)"
+              }}>
+                <div style={{wordBreak:"break-word"}}>{m.message}</div>
+                <div style={{fontSize:10,opacity:.7,marginTop:4,textAlign:"right"}}>
+                  {date} {time} {isOut?"✓✓":""}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Refresh button */}
+      <div style={{textAlign:"center",marginTop:12}}>
+        <button onClick={loadMsgs} className="tap gh"
+          style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 16px",fontSize:12,color:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          🔄 Atualizar mensagens
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── LEAD MODAL ─────────────────────────────────────────────────── */
 function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [tab,setTab]=useState("info"),[editing,setEditing]=useState(false);
@@ -1082,7 +1178,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
         ))}
       </div>
       <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,marginBottom:18}}>
-        {[["info","Infos"],["historico","Histórico"],["followup","Follow-up"]].map(([id,lbl])=>(
+        {[["info","Infos"],["historico","Histórico"],["whatsapp","💬 WhatsApp"],["followup","Follow-up"]].map(([id,lbl])=>(
           <button key={id} onClick={()=>setTab(id)} className="tap"
             style={{flex:1,background:"none",border:"none",borderBottom:tab===id?`2px solid ${T.accent}`:"2px solid transparent",padding:"10px 8px",fontSize:14,fontWeight:600,color:tab===id?T.accent:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:-1}}>
             {lbl}
@@ -1149,6 +1245,8 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
           </div>
         </div>
       )}
+      {tab==="whatsapp"&&<WhatsAppTab lead={lead} mob={mob}/>}
+
       {tab==="followup"&&(
         <div style={{display:"grid",gap:14}}>
           {lead.followUp&&<div style={{background:lead.followUp.date<ts?"rgba(239,68,68,.15)":"rgba(232,93,32,.12)",borderRadius:10,padding:"14px 16px",borderLeft:`3px solid ${lead.followUp.date<ts?"#ef4444":"#e85d20"}`}}>
@@ -1235,11 +1333,15 @@ export default function App() {
     (async()=>{
       const{data:ld}=await supabase.from("leads").select("*").order("created_at",{ascending:false});
       const{data:hd}=await supabase.from("lead_history").select("*").order("date",{ascending:false});
+      const{data:waUnread}=await supabase.from("whatsapp_messages").select("lead_id").eq("direction","in").eq("read",false);
+      const unreadMap={};
+      (waUnread||[]).forEach(m=>{if(m.lead_id)unreadMap[m.lead_id]=(unreadMap[m.lead_id]||0)+1;});
       setLeads((ld||[]).map(l=>({
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
         stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,
         followUp:l.follow_up_date?{date:l.follow_up_date,note:l.follow_up_note||""}:null,
         history:(hd||[]).filter(h=>h.lead_id===l.id).map(h=>({id:h.id,type:h.type,note:h.note,date:h.date})),
+        unreadCount:unreadMap[l.id]||0,
       })));
       setDbLoading(false);
     })();
