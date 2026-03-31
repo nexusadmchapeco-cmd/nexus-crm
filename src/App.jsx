@@ -1281,7 +1281,7 @@ function WhatsAppTab({lead, mob}) {
 
 /* ─── LEAD MODAL ─────────────────────────────────────────────────── */
 function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
-  const [tab,setTab]=useState("info"),[editing,setEditing]=useState(false);
+  const [tab,setTab]=useState("info"),[editing,setEditing]=useState(!lead.unit);
   const [form,setForm]=useState({...lead});
   const [hist,setHist]=useState({type:"WhatsApp",note:""});
   const [fu,setFu]=useState(lead.followUp||{date:"",note:""});
