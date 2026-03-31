@@ -720,7 +720,7 @@ function WhatsAppInbox({leads, mob, onSelectLead}) {
     if(!m.read&&m.direction==="in") conversations[key].unread++;
   });
 
-  const convList = Object.values(conversations).sort((a,b)=>new Date(b.lastTime)-new Date(a.lastTime));
+  const convList = Object.values(conversations).filter(c=>c.key.length<=13).sort((a,b)=>new Date(b.lastTime)-new Date(a.lastTime));
   const selected = selectedPhone ? conversations[selectedPhone] : null;
 
   const markRead = async (key) => {
