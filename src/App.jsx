@@ -1347,6 +1347,77 @@ function Relatorios({leads,mob}) {
   );
 }
 
+/* ─── WHATSAPP TAB ───────────────────────────────────────────────── */
+function WhatsAppTab({lead, mob}) {
+  const [msgs, setMsgs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{ loadMsgs(); const iv=setInterval(loadMsgs,10000); return()=>clearInterval(iv); },[lead.id]);
+
+  const loadMsgs = async () => {
+    const cleanPhone = lead.phone.replace(/[^0-9]/g,"").slice(-9);
+    const { data } = await supabase.from("whatsapp_messages").select("*")
+      .or(`lead_id.eq.${lead.id},phone.ilike.%${cleanPhone}%`)
+      .order("timestamp", {ascending: true});
+    setMsgs(data||[]);
+    if (data && data.some(m=>!m.read&&m.direction==="in")) {
+      await supabase.from("whatsapp_messages").update({read:true})
+        .eq("lead_id", lead.id).eq("direction","in").eq("read",false);
+    }
+    setLoading(false);
+  };
+
+  const openWhatsApp = () => {
+    const phone = lead.phone.replace(/[^0-9]/g,"");
+    const num = phone.startsWith("55") ? phone : `55${phone}`;
+    window.open(`https://wa.me/${num}`,"_blank");
+  };
+
+  if (loading) return <div style={{textAlign:"center",padding:32}}><Spinner/></div>;
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{fontSize:13,color:T.muted}}>{msgs.length} mensagens · {lead.phone}</div>
+        <button onClick={openWhatsApp} className="tap"
+          style={{background:"#25d366",color:"white",border:"none",borderRadius:10,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}>
+          📱 Abrir no WhatsApp
+        </button>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:360,overflowY:"auto",background:"#f9f9f7",borderRadius:10,padding:12}}>
+        {msgs.length===0 ? (
+          <div style={{textAlign:"center",color:T.muted,padding:"40px 0",fontSize:14}}>
+            <div style={{fontSize:32,marginBottom:8}}>💬</div>
+            Nenhuma mensagem ainda.
+          </div>
+        ) : msgs.map(m=>{
+          const isOut = m.direction==="out";
+          const time = new Date(m.timestamp).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+          const date = new Date(m.timestamp).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
+          return (
+            <div key={m.id} style={{display:"flex",justifyContent:isOut?"flex-end":"flex-start"}}>
+              <div style={{maxWidth:"75%",background:isOut?"#e85d20":"white",color:isOut?"white":"#111",
+                borderRadius:isOut?"14px 14px 2px 14px":"14px 14px 14px 2px",padding:"9px 12px",
+                fontSize:13,lineHeight:1.4,boxShadow:"0 1px 3px rgba(0,0,0,.1)"}}>
+                <div style={{wordBreak:"break-word"}}>{m.message}</div>
+                <div style={{fontSize:10,opacity:.65,marginTop:4,textAlign:"right"}}>
+                  {date} {time} {isOut?"✓✓":""}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{textAlign:"center",marginTop:12}}>
+        <button onClick={loadMsgs} className="tap gh"
+          style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 16px",fontSize:12,color:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          🔄 Atualizar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── LEAD MODAL ─────────────────────────────────────────────────── */
 function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [tab,setTab]=useState("info"),[editing,setEditing]=useState(!lead.unit);
