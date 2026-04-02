@@ -1136,153 +1136,213 @@ function FollowUps({leads,onSelect,mob}) {
 
 /* ─── RELATÓRIOS ─────────────────────────────────────────────────── */
 function Relatorios({leads,mob}) {
-  const total=leads.length,matr=leads.filter(l=>l.stage==="matriculado").length,perd=leads.filter(l=>l.stage==="perdido").length;
-  const taxa=total>0?Math.round((matr/total)*100):0;
-  const cData=COURSES.map(c=>({l:c,t:leads.filter(x=>x.course===c).length,m:leads.filter(x=>x.course===c&&x.stage==="matriculado").length})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
-  const oData=SOURCES.map(s=>({l:s,t:leads.filter(x=>x.source===s).length,m:leads.filter(x=>x.source===s&&x.stage==="matriculado").length})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
-  return (
-    <div style={{animation:"fadeUp .3s"}}>
-      <div style={{marginBottom:20}}>
-        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:400}}>Relatórios</h1>
+  const now = new Date();
+  const [selMonth, setSelMonth] = useState(now.getMonth());
+  const [selYear, setSelYear] = useState(now.getFullYear());
+  const [viewMode, setViewMode] = useState("month"); // "month" | "evolution"
+
+  // Generate last 12 months for selector
+  const months = [];
+  for (let i=11; i>=0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push({ month: d.getMonth(), year: d.getFullYear(),
+      label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}` });
+  }
+
+  // Filter leads by selected month
+  const filtered = leads.filter(l => {
+    if (!l.createdAt) return false;
+    const d = new Date(l.createdAt);
+    return d.getMonth()===selMonth && d.getFullYear()===selYear;
+  });
+
+  // Also count matriculados that were moved this month (use createdAt as proxy)
+  const matr = filtered.filter(l=>l.stage==="matriculado").length;
+  const taxa = filtered.length>0 ? Math.round((matr/filtered.length)*100) : 0;
+  const perdidos = filtered.filter(l=>l.stage==="perdido").length;
+
+  // By unit
+  const byUnit = UNITS.map(u=>({
+    ...u,
+    total: filtered.filter(l=>l.unit===u.id).length,
+    matr: filtered.filter(l=>l.unit===u.id&&l.stage==="matriculado").length,
+  }));
+
+  // By origin
+  const byOrigin = SOURCES.map(s=>({
+    label:s,
+    total: filtered.filter(l=>l.source===s).length,
+    matr: filtered.filter(l=>l.source===s&&l.stage==="matriculado").length,
+  })).filter(x=>x.total>0).sort((a,b)=>b.total-a.total);
+
+  // By course
+  const byCourse = COURSES.map(c=>({
+    label:c,
+    total: filtered.filter(l=>l.course===c).length,
+    matr: filtered.filter(l=>l.course===c&&l.stage==="matriculado").length,
+  })).filter(x=>x.total>0).sort((a,b)=>b.total-a.total);
+
+  // Evolution data - last 6 months
+  const evolution = [];
+  for (let i=5; i>=0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const m = d.getMonth(), y = d.getFullYear();
+    const ml = leads.filter(l=>{ if(!l.createdAt)return false; const ld=new Date(l.createdAt); return ld.getMonth()===m&&ld.getFullYear()===y; });
+    evolution.push({
+      label: MONTHS[m].slice(0,3),
+      leads: ml.length,
+      matr: ml.filter(l=>l.stage==="matriculado").length,
+      taxa: ml.length>0?Math.round((ml.filter(l=>l.stage==="matriculado").length/ml.length)*100):0,
+    });
+  }
+  const maxLeads = Math.max(...evolution.map(e=>e.leads), 1);
+
+  const SC=({label,value,sub,color,icon})=>(
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?"13px 15px":"18px 20px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em"}}>{label}</span>
+        <span style={{fontSize:17}}>{icon}</span>
       </div>
-      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?16:22,marginBottom:12}}>
-        <h3 style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:16}}>Funil de Conversão</h3>
-        {STAGES.map(s=>{const cnt=leads.filter(l=>l.stage===s.id).length,pct=total>0?Math.round((cnt/total)*100):0;return(
-          <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}>
-            <span style={{width:mob?140:170,fontSize:11,fontWeight:500,flexShrink:0}}>{s.label}</span>
-            <div style={{flex:1,background:"#f0f0f0",borderRadius:6,height:22,overflow:"hidden"}}>
-              <div style={{width:`${pct}%`,height:"100%",background:s.hex,borderRadius:6,opacity:.85,display:"flex",alignItems:"center",paddingLeft:8,minWidth:pct>0?24:0}}>
-                {pct>8&&<span style={{color:"white",fontSize:11,fontWeight:700}}>{pct}%</span>}
-              </div>
-            </div>
-            <span style={{fontSize:13,fontWeight:700,color:s.hex,width:24,textAlign:"right"}}>{cnt}</span>
-          </div>
-        );})}
-        <div style={{display:"flex",gap:24,marginTop:16}}>
-          <div><div style={{fontSize:32,fontWeight:700,color:T.accent,letterSpacing:"-1px",lineHeight:1}}>{taxa}%</div><div style={{fontSize:11,color:T.muted,marginTop:3}}>Taxa de conversão</div></div>
-          <div><div style={{fontSize:32,fontWeight:700,color:"#f87171",letterSpacing:"-1px",lineHeight:1}}>{perd>0&&total>0?Math.round((perd/total)*100):0}%</div><div style={{fontSize:11,color:T.muted,marginTop:3}}>Taxa de perda</div></div>
-        </div>
-      </div>
-      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?16:22,marginBottom:12}}>
-        <h3 style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:14}}>Por Curso</h3>
-        {cData.map(c=>(
-          <div key={c.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
-            <div><div style={{fontWeight:500,fontSize:14}}>{c.l}</div><div style={{fontSize:12,color:T.muted,marginTop:2}}>{c.t} leads · {c.m} matr.</div></div>
-            <Pill color={T.accent}>{c.t>0?Math.round((c.m/c.t)*100):0}%</Pill>
-          </div>
-        ))}
-      </div>
-      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?16:22}}>
-        <h3 style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:14}}>Por Origem</h3>
-        {oData.map(o=>(
-          <div key={o.l} style={{marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5}}>
-              <span style={{fontWeight:500}}>{o.l}</span><span style={{color:T.muted,fontSize:12}}>{o.m}/{o.t} matr.</span>
-            </div>
-            <div style={{background:"#f0f0f0",borderRadius:6,height:8,overflow:"hidden"}}>
-              <div style={{width:`${(o.t/Math.max(...oData.map(x=>x.t),1))*100}%`,height:"100%",background:T.accent,borderRadius:6,opacity:.65}}/>
-            </div>
-          </div>
-        ))}
-      </div>
+      <div style={{fontSize:mob?28:36,fontWeight:700,color,letterSpacing:"-1.5px",lineHeight:1}}>{value}</div>
+      {sub&&<div style={{fontSize:11,color:T.muted,marginTop:4}}>{sub}</div>}
     </div>
   );
-}
-
-/* ─── WHATSAPP TAB ───────────────────────────────────────────────── */
-function WhatsAppTab({lead, mob}) {
-  const [msgs, setMsgs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [unread, setUnread] = useState(0);
-
-  useEffect(()=>{
-    loadMsgs();
-    // Poll every 10 seconds for new messages
-    const interval = setInterval(loadMsgs, 10000);
-    return () => clearInterval(interval);
-  },[lead.id]);
-
-  const loadMsgs = async () => {
-    const cleanPhone = lead.phone.replace(/[^0-9]/g,"").slice(-9);
-    const { data } = await supabase
-      .from("whatsapp_messages")
-      .select("*")
-      .or(`lead_id.eq.${lead.id},phone.ilike.%${cleanPhone}%`)
-      .order("timestamp", {ascending: true});
-    // Also fix lead_id for messages that matched by phone but have no lead_id
-    if (data && data.length > 0) {
-      const unlinked = data.filter(m => !m.lead_id);
-      if (unlinked.length > 0) {
-        await supabase.from("whatsapp_messages").update({lead_id: lead.id})
-          .ilike("phone", `%${cleanPhone}%`).is("lead_id", null);
-      }
-    }
-    setMsgs(data||[]);
-    setUnread((data||[]).filter(m=>!m.read&&m.direction==="in").length);
-    // Mark as read
-    if (data && data.some(m=>!m.read&&m.direction==="in")) {
-      await supabase.from("whatsapp_messages").update({read:true})
-        .eq("lead_id", lead.id).eq("direction","in").eq("read",false);
-    }
-    setLoading(false);
-  };
-
-  const openWhatsApp = () => {
-    const phone = lead.phone.replace(/[^0-9]/g,"");
-    const num = phone.startsWith("55") ? phone : `55${phone}`;
-    window.open(`https://wa.me/${num}`,"_blank");
-  };
-
-  if (loading) return <div style={{textAlign:"center",padding:32}}><Spinner/></div>;
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div style={{fontSize:13,color:T.muted}}>{msgs.length} mensagens · {lead.phone}</div>
-        <button onClick={openWhatsApp} className="tap"
-          style={{background:"#25d366",color:"white",border:"none",borderRadius:10,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}>
-          📱 Abrir no WhatsApp
-        </button>
+    <div style={{animation:"fadeUp .3s"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:10}}>
+        <div>
+          <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:700,letterSpacing:"-.5px"}}>Relatórios</h1>
+          <p style={{color:T.muted,fontSize:13,marginTop:4}}>Análise comercial por período</p>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <button onClick={()=>setViewMode("month")} className="tap"
+            style={{background:viewMode==="month"?T.accent:"transparent",color:viewMode==="month"?"white":T.muted,border:`1.5px solid ${viewMode==="month"?T.accent:T.border}`,borderRadius:9,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            📊 Mensal
+          </button>
+          <button onClick={()=>setViewMode("evolution")} className="tap"
+            style={{background:viewMode==="evolution"?T.accent:"transparent",color:viewMode==="evolution"?"white":T.muted,border:`1.5px solid ${viewMode==="evolution"?T.accent:T.border}`,borderRadius:9,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            📈 Evolução
+          </button>
+        </div>
       </div>
 
-      {/* Messages */}
-      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:360,overflowY:"auto",padding:"4px 0"}}>
-        {msgs.length===0 ? (
-          <div style={{textAlign:"center",color:T.muted,padding:"40px 0",fontSize:14}}>
-            <div style={{fontSize:32,marginBottom:8}}>💬</div>
-            Nenhuma mensagem ainda.<br/>
-            <span style={{fontSize:12}}>As mensagens aparecerão aqui automaticamente.</span>
-          </div>
-        ) : msgs.map(m=>{
-          const isOut = m.direction==="out";
-          const time = new Date(m.timestamp).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-          const date = new Date(m.timestamp).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
-          return (
-            <div key={m.id} style={{display:"flex",justifyContent:isOut?"flex-end":"flex-start"}}>
-              <div style={{
-                maxWidth:"75%",background:isOut?"#e85d20":"#f0f0f0",
-                color:isOut?"white":"#111",borderRadius:isOut?"14px 14px 2px 14px":"14px 14px 14px 2px",
-                padding:"9px 12px",fontSize:13,lineHeight:1.4,
-                boxShadow:"0 1px 3px rgba(0,0,0,.1)"
-              }}>
-                <div style={{wordBreak:"break-word"}}>{m.message}</div>
-                <div style={{fontSize:10,opacity:.7,marginTop:4,textAlign:"right"}}>
-                  {date} {time} {isOut?"✓✓":""}
-                </div>
+      {viewMode==="month"&&<>
+        {/* Month selector */}
+        <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:20,WebkitOverflowScrolling:"touch"}}>
+          {months.map(m=>{
+            const on=m.month===selMonth&&m.year===selYear;
+            return (
+              <button key={`${m.month}-${m.year}`} onClick={()=>{setSelMonth(m.month);setSelYear(m.year);}} className="tap"
+                style={{flexShrink:0,background:on?T.accent:"transparent",color:on?"white":T.muted,border:`1.5px solid ${on?T.accent:T.border}`,borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* KPIs */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          <SC label="Leads Novos" value={filtered.length} icon="👥" color={T.text}/>
+          <SC label="Matrículas" value={matr} icon="🏆" color={T.accent} sub={`${taxa}% conversão`}/>
+          <SC label="Perdidos" value={perdidos} icon="❌" color="#ef4444" sub={filtered.length>0?`${Math.round((perdidos/filtered.length)*100)}% dos leads`:""}/>
+          <SC label="Em Negociação" value={filtered.filter(l=>l.stage==="negociacao").length} icon="⚡" color="#6366f1"/>
+        </div>
+
+        {/* By Unit */}
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?16:22,marginBottom:12}}>
+          <h3 style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:16}}>Por Unidade</h3>
+          {byUnit.map(u=>(
+            <div key={u.id} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:u.border,flexShrink:0}}/>
+              <span style={{width:mob?100:130,fontSize:13,fontWeight:500,flexShrink:0}}>{u.label}</span>
+              <div style={{flex:1,background:T.bg,borderRadius:6,height:10,overflow:"hidden"}}>
+                <div style={{width:filtered.length>0?`${(u.total/filtered.length)*100}%`:"0%",height:"100%",background:u.border,borderRadius:6}}/>
               </div>
+              <span style={{fontSize:12,color:T.muted,width:60,textAlign:"right",flexShrink:0}}>{u.total} leads</span>
+              <span style={{fontSize:12,fontWeight:700,color:T.accent,width:40,textAlign:"right",flexShrink:0}}>{u.matr} ✓</span>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
 
-      {/* Refresh button */}
-      <div style={{textAlign:"center",marginTop:12}}>
-        <button onClick={loadMsgs} className="tap gh"
-          style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 16px",fontSize:12,color:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-          🔄 Atualizar mensagens
-        </button>
-      </div>
+        {/* By Origin */}
+        {byOrigin.length>0&&<div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?16:22,marginBottom:12}}>
+          <h3 style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:16}}>Por Origem</h3>
+          {byOrigin.map(o=>(
+            <div key={o.label} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+              <span style={{width:mob?80:100,fontSize:13,flexShrink:0}}>{o.label}</span>
+              <div style={{flex:1,background:T.bg,borderRadius:6,height:10,overflow:"hidden"}}>
+                <div style={{width:`${(o.total/Math.max(...byOrigin.map(x=>x.total),1))*100}%`,height:"100%",background:T.accent,borderRadius:6,opacity:.7}}/>
+              </div>
+              <span style={{fontSize:12,color:T.muted,width:50,textAlign:"right",flexShrink:0}}>{o.total}</span>
+              <span style={{fontSize:12,fontWeight:700,color:T.accent,width:36,textAlign:"right",flexShrink:0}}>{o.matr}✓</span>
+            </div>
+          ))}
+        </div>}
+
+        {/* By Course */}
+        {byCourse.length>0&&<div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?16:22}}>
+          <h3 style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:16}}>Por Curso</h3>
+          {byCourse.map(c=>(
+            <div key={c.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
+              <div><div style={{fontWeight:500,fontSize:14}}>{c.label}</div><div style={{fontSize:12,color:T.muted,marginTop:2}}>{c.total} leads · {c.matr} matr.</div></div>
+              <Pill color={T.accent}>{c.total>0?Math.round((c.matr/c.total)*100):0}%</Pill>
+            </div>
+          ))}
+        </div>}
+      </>}
+
+      {viewMode==="evolution"&&<>
+        {/* Evolution chart */}
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?16:22,marginBottom:12}}>
+          <h3 style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:20}}>Leads & Matrículas — Últimos 6 Meses</h3>
+          <div style={{display:"flex",gap:mob?8:16,alignItems:"flex-end",height:160,marginBottom:12}}>
+            {evolution.map((e,i)=>(
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.accent}}>{e.matr>0?e.matr:""}</div>
+                <div style={{width:"100%",display:"flex",gap:2,alignItems:"flex-end",height:120}}>
+                  <div style={{flex:1,background:T.accentLight,borderRadius:"4px 4px 0 0",height:`${Math.max((e.leads/maxLeads)*100,2)}%`,transition:"height .4s",position:"relative"}}>
+                    <div style={{position:"absolute",bottom:0,left:0,right:0,background:T.accent,borderRadius:"4px 4px 0 0",height:`${e.leads>0?(e.matr/e.leads)*100:0}%`}}/>
+                  </div>
+                </div>
+                <div style={{fontSize:10,color:T.muted,fontWeight:600}}>{e.label}</div>
+                <div style={{fontSize:10,color:T.text,fontWeight:700}}>{e.leads}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:16,fontSize:11,color:T.muted}}>
+            <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:12,height:12,borderRadius:3,background:T.accentLight,border:`1px solid ${T.accent}`}}/> Total de leads</div>
+            <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:12,height:12,borderRadius:3,background:T.accent}}/> Matrículas</div>
+          </div>
+        </div>
+
+        {/* Monthly table */}
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{borderBottom:`1px solid ${T.border}`,background:T.bg}}>
+              {["Mês","Leads","Matrículas","Conversão","Perdidos"].map(h=>(
+                <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em"}}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {[...evolution].reverse().map((e,i)=>{
+                const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+                const ml = leads.filter(l=>{ if(!l.createdAt)return false; const ld=new Date(l.createdAt); return ld.getMonth()===d.getMonth()&&ld.getFullYear()===d.getFullYear(); });
+                const perd = ml.filter(l=>l.stage==="perdido").length;
+                return (
+                  <tr key={i} className="rw" style={{borderBottom:`1px solid ${T.border}`}}>
+                    <td style={{padding:"12px 16px",fontWeight:600}}>{MONTHS[d.getMonth()]} {d.getFullYear()}</td>
+                    <td style={{padding:"12px 16px"}}>{e.leads}</td>
+                    <td style={{padding:"12px 16px",color:T.accent,fontWeight:700}}>{e.matr}</td>
+                    <td style={{padding:"12px 16px"}}><Pill color={e.taxa>=20?"#10b981":e.taxa>=10?T.gold:"#ef4444"}>{e.taxa}%</Pill></td>
+                    <td style={{padding:"12px 16px",color:"#ef4444"}}>{perd}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </>}
     </div>
   );
 }
