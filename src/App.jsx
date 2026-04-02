@@ -916,7 +916,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
                   <span style={{fontSize:11,fontWeight:700}}>{stage.label}</span>
                   <span style={{marginLeft:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:T.muted}}>{sl.length}</span>
                 </div>
-                <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:40}}>
+                <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:40,maxHeight:340,overflowY:"auto",paddingRight:2}}>
                   {sl.map(lead=><LeadCard key={lead.id} lead={lead} stage={stage}/>)}
                 </div>
               </div>
@@ -944,7 +944,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
                   <span style={{fontSize:11,fontWeight:700}}>{stage.label}</span>
                   <span style={{marginLeft:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:T.muted}}>{sl.length}</span>
                 </div>
-                <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:40}}>
+                <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:40,maxHeight:340,overflowY:"auto",paddingRight:2}}>
                   {sl.map(lead=><LeadCard key={lead.id} lead={lead} stage={stage}/>)}
                 </div>
               </div>
@@ -1292,7 +1292,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [tab,setTab]=useState("info"),[editing,setEditing]=useState(!lead.unit);
   const [form,setForm]=useState({...lead, unit:lead.unit||''});
   const [hist,setHist]=useState({type:"WhatsApp",note:""});
-  const [fu,setFu]=useState(lead.followUp||{date:"",note:""});
+  const [fu,setFu]=useState(lead.followUp||{date:"",note:"",time:""});
   const [saving,setSaving]=useState(false);
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const ts=today(),st=STAGES.find(s=>s.id===lead.stage);
@@ -1300,7 +1300,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const saveInfo=async()=>{setSaving(true);await supabase.from("leads").update({name:form.name,phone:form.phone,email:form.email,course:form.course,source:form.source,notes:form.notes,responsavel:form.responsavel||null,unit:form.unit||null}).eq("id",lead.id);onUpdate({...lead,...form});setEditing(false);setSaving(false);};
   const changeStage=async(id)=>{await supabase.from("leads").update({stage:id}).eq("id",lead.id);onUpdate({...lead,stage:id});};
   const addHist=async()=>{if(!hist.note.trim())return;const entry={id:uid(),lead_id:lead.id,type:hist.type,note:hist.note,date:new Date().toISOString()};await supabase.from("lead_history").insert(entry);onUpdate({...lead,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});setHist({type:"WhatsApp",note:""});};
-  const saveFu=async()=>{await supabase.from("leads").update({follow_up_date:fu.date||null,follow_up_note:fu.note||null}).eq("id",lead.id);onUpdate({...lead,followUp:fu.date?{...fu}:null});};
+  const saveFu=async()=>{await supabase.from("leads").update({follow_up_date:fu.date||null,follow_up_note:fu.note||null,follow_up_time:fu.time||null}).eq("id",lead.id);onUpdate({...lead,followUp:fu.date?{...fu}:null});};
   const deleteLead=async()=>{if(!window.confirm("Excluir este lead?"))return;await supabase.from("leads").delete().eq("id",lead.id);onDelete(lead.id);};
 
   return (
@@ -1331,6 +1331,17 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
             <Sel label="Origem" value={form.source||""} onChange={e=>f("source",e.target.value)} options={SOURCES}/>
           </div>
           <Inp label="Responsável (opcional)" value={form.responsavel||""} onChange={e=>f("responsavel",e.target.value)}/>
+          <div>
+            <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Unidade</span>
+            <div style={{display:"flex",gap:8}}>
+              {UNITS.map(u=>(
+                <button key={u.id} type="button" onClick={()=>f("unit",u.id)} className="tap"
+                  style={{flex:1,background:form.unit===u.id?u.color:"transparent",border:`1.5px solid ${form.unit===u.id?u.border:T.border}`,borderRadius:10,padding:"10px 6px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:form.unit===u.id?u.text:T.muted,transition:"all .15s"}}>
+                  {u.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <Inp label="Observações" type="textarea" value={form.notes||""} onChange={e=>f("notes",e.target.value)}/>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <Btn variant="ghost" onClick={()=>setEditing(false)}>Cancelar</Btn>
@@ -1359,6 +1370,27 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
       ))}
       {tab==="historico"&&(
         <div>
+
+          {/* Cadência de contatos */}
+          <div style={{marginBottom:4}}>
+            <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Cadência de contatos</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+              {[
+                {n:"1°",label:"Primeiro Contato",color:"#6366f1",msg:"Olá! Vi que você se interessou pela Nexus English Center. Posso te contar mais sobre nossos cursos?"},
+                {n:"2°",label:"Retomar Contato",color:"#8b5cf6",msg:"Oi! Passando para retomar contato. Teve chance de pensar nos nossos cursos de inglês?"},
+                {n:"3°",label:"Oferecer Ligação",color:"#f59e0b",msg:"Olá! Que tal uma ligação rápida para tirar suas dúvidas sobre o curso?"},
+                {n:"4°",label:"Aula Experimental",color:"#10b981",msg:"Oi! Gostaria de te convidar para uma aula experimental gratuita na Nexus!"},
+                {n:"5°",label:"Último Aviso",color:"#ef4444",msg:"Olá! Vou encerrar nossos contatos em breve. Ainda tem interesse em aprender inglês?"},
+                {n:"6°",label:"Encerrar Contato",color:"#6b7280",msg:"Oi! Estou encerrando sua lista de contatos. Posso te enviar promoções futuramente?"},
+              ].map(c=>(
+                <button key={c.n} className="tap" onClick={()=>setHist({type:"WhatsApp",note:`[${c.n} ${c.label}] ${c.msg}`})}
+                  style={{background:c.color+"15",border:`1.5px solid ${c.color}44`,borderRadius:9,padding:"8px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:c.color}}>{c.n}</div>
+                  <div style={{fontSize:10,fontWeight:600,color:T.text,marginTop:2,lineHeight:1.3}}>{c.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
           <div style={{display:"flex",flexDirection:mob?"column":"row",gap:10,marginBottom:16,alignItems:mob?"stretch":"flex-end"}}>
             <Sel label="Tipo" value={hist.type} onChange={e=>setHist(p=>({...p,type:e.target.value}))} options={CTYPES}/>
             <div style={{flex:1}}><Inp label="Nota" value={hist.note} onChange={e=>setHist(p=>({...p,note:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addHist()} placeholder="O que aconteceu?"/></div>
