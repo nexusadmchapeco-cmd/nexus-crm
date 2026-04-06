@@ -1556,7 +1556,25 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
           <Inp label="Data" type="date" value={fu.date} onChange={e=>setFu(p=>({...p,date:e.target.value}))}/>
           <Inp label="Nota (opcional)" value={fu.note} onChange={e=>setFu(p=>({...p,note:e.target.value}))} placeholder="Ex: Ligar para confirmar"/>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
-            {lead.followUp&&<Btn variant="danger" onClick={async()=>{await supabase.from("leads").update({follow_up_date:null,follow_up_note:null}).eq("id",lead.id);onUpdate({...lead,followUp:null});setFu({date:"",note:""});}}>Remover</Btn>}
+            {lead.followUp&&<>
+              <Btn variant="primary" onClick={async()=>{
+                const note=`✓ Follow-up realizado em ${new Date().toLocaleDateString("pt-BR")}${lead.followUp.time?" às "+lead.followUp.time:""}`;
+                const entry={id:uid(),lead_id:lead.id,type:"Anotação",note,date:new Date().toISOString()};
+                await supabase.from("lead_history").insert(entry);
+                await supabase.from("leads").update({follow_up_date:null,follow_up_note:null,follow_up_time:null}).eq("id",lead.id);
+                onUpdate({...lead,followUp:null,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});
+                setFu({date:"",note:"",time:""});
+              }}>✓ Concluído</Btn>
+              <Btn variant="danger" onClick={async()=>{await supabase.from("leads").update({follow_up_date:null,follow_up_note:null,follow_up_time:null}).eq("id",lead.id);onUpdate({...lead,followUp:null});setFu({date:"",note:"",time:""});}}>🗑 Remover</Btn>
+            <Btn variant="primary" onClick={async()=>{
+              const note=`Follow-up concluído${lead.followUp?.time?` às ${lead.followUp.time}`:""}${lead.followUp?.note?` — ${lead.followUp.note}`:""}`;
+              const entry={id:uid(),lead_id:lead.id,type:"Anotação",note,date:new Date().toISOString()};
+              await supabase.from("lead_history").insert(entry);
+              await supabase.from("leads").update({follow_up_date:null,follow_up_note:null,follow_up_time:null}).eq("id",lead.id);
+              onUpdate({...lead,followUp:null,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});
+              setFu({date:"",note:"",time:""});
+            }}>✅ Concluído</Btn>
+            </>}
             <Btn variant="gold" onClick={saveFu} full={mob}>💾 Salvar follow-up</Btn>
           </div>
         </div>
