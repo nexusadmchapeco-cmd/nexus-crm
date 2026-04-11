@@ -1603,6 +1603,9 @@ function WhatsAppTab({lead, mob}) {
 /* ─── LEAD MODAL ─────────────────────────────────────────────────── */
 function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [tab,setTab]=useState("info"),[editing,setEditing]=useState(!lead.unit);
+  const [nextCadModal,setNextCadModal]=useState(null); // {step, label, suggestedDate}
+  const [concluiModal,setConcluiModal]=useState(false);
+  const [concluiObs,setConcluiObs]=useState("");
   const [form,setForm]=useState({...lead, unit:lead.unit||''});
   const [hist,setHist]=useState({type:"WhatsApp",note:""});
   const [fu,setFu]=useState(lead.followUp||{date:"",note:"",time:""});
@@ -1699,6 +1702,15 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
                     if(!lead.cadenciaStarted||c.step===1)updates.cadencia_started_at=now;
                     await supabase.from("leads").update(updates).eq("id",lead.id);
                     onUpdate({...lead,cadenciaStep:c.step,cadenciaStarted:lead.cadenciaStarted||now});
+                    // Suggest next step
+                    const nextStep=CADENCIA.find(x=>x.step===c.step+1);
+                    if(nextStep){
+                      const base=new Date();
+                      const diffDays=nextStep.day-c.day;
+                      const suggested=new Date(base.getTime()+(diffDays*24*60*60*1000));
+                      const suggestedDate=suggested.toISOString().split("T")[0];
+                      setNextCadModal({step:nextStep.step,label:nextStep.label,desc:nextStep.desc,color:nextStep.color,suggestedDate,suggestedTime:""});
+                    }
                   }
                 }}
                   style={{background:c.color+"15",border:`1.5px solid ${c.color}44`,borderRadius:9,padding:"8px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
@@ -1742,17 +1754,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
           <Inp label="Data" type="date" value={fu.date} onChange={e=>setFu(p=>({...p,date:e.target.value}))}/>
           <Inp label="Nota (opcional)" value={fu.note} onChange={e=>setFu(p=>({...p,note:e.target.value}))} placeholder="Ex: Ligar para confirmar"/>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
-            {lead.followUp&&<>
-              <Btn variant="primary" onClick={async()=>{
-                const note=`✓ Follow-up realizado em ${new Date().toLocaleDateString("pt-BR")}${lead.followUp.time?" às "+lead.followUp.time:""}`;
-                const entry={id:uid(),lead_id:lead.id,type:"Anotação",note,date:new Date().toISOString()};
-                await supabase.from("lead_history").insert(entry);
-                await supabase.from("leads").update({follow_up_date:null,follow_up_note:null,follow_up_time:null}).eq("id",lead.id);
-                onUpdate({...lead,followUp:null,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});
-                setFu({date:"",note:"",time:""});
-              }}>✓ Concluído</Btn>
-              <Btn variant="danger" onClick={async()=>{await supabase.from("leads").update({follow_up_date:null,follow_up_note:null,follow_up_time:null}).eq("id",lead.id);onUpdate({...lead,followUp:null});setFu({date:"",note:"",time:""});}}>🗑 Remover</Btn>
-            <Btn variant="primary" onClick={async()=>{
+            {<Btn variant="primary" onClick={async()=>{
               const note=`Follow-up concluído${lead.followUp?.time?` às ${lead.followUp.time}`:""}${lead.followUp?.note?` — ${lead.followUp.note}`:""}`;
               const entry={id:uid(),lead_id:lead.id,type:"Anotação",note,date:new Date().toISOString()};
               await supabase.from("lead_history").insert(entry);
@@ -1762,6 +1764,99 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
             }}>✅ Concluído</Btn>
             </>}
             <Btn variant="gold" onClick={saveFu} full={mob}>💾 Salvar follow-up</Btn>
+          </div>
+        </div>
+      )}
+      {/* Concluir follow-up modal */}
+      {concluiModal&&(
+        <div onClick={e=>e.target===e.currentTarget&&setConcluiModal(false)}
+          style={{position:"fixed",inset:0,background:"rgba(26,23,20,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:20,backdropFilter:"blur(4px)"}}>
+          <div style={{background:"white",borderRadius:20,padding:"28px 32px",width:"100%",maxWidth:460,boxShadow:"0 8px 40px rgba(0,0,0,.2)",animation:"fadeUp .2s"}}>
+            <div style={{marginBottom:20}}>
+              <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700,color:"#111",marginBottom:4}}>✅ Concluir Follow-up</div>
+              <div style={{fontSize:13,color:"#888"}}>
+                {lead.followUp?.date&&<span>📅 {lead.followUp.date}{lead.followUp.time?` às ${lead.followUp.time}`:""}</span>}
+                {lead.followUp?.note&&<span> · {lead.followUp.note}</span>}
+              </div>
+            </div>
+            <div style={{marginBottom:20}}>
+              <span style={{display:"block",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>O que aconteceu? *</span>
+              <textarea value={concluiObs} onChange={e=>setConcluiObs(e.target.value)}
+                placeholder="Ex: Cliente confirmou interesse, vai pensar e retornar na próxima semana. Próximo passo: enviar proposta."
+                style={{width:"100%",background:"#f8f8f8",border:"1.5px solid #e8e8e8",borderRadius:10,padding:"12px 14px",fontSize:14,color:"#111",outline:"none",fontFamily:"'DM Sans',sans-serif",resize:"vertical",minHeight:100,lineHeight:1.5}}
+                onFocus={e=>e.target.style.borderColor="#e85d20"}
+                onBlur={e=>e.target.style.borderColor="#e8e8e8"}
+                autoFocus/>
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setConcluiModal(false)} className="tap"
+                style={{flex:1,background:"transparent",border:"1.5px solid #e8e8e8",borderRadius:11,padding:"12px",fontSize:14,fontWeight:600,color:"#888",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                Cancelar
+              </button>
+              <button onClick={async()=>{
+                if(!concluiObs.trim()){alert("Descreva o que aconteceu antes de concluir.");return;}
+                const fuInfo=`${lead.followUp?.date||""}${lead.followUp?.time?` às ${lead.followUp.time}`:""}${lead.followUp?.note?` — ${lead.followUp.note}`:""}`;
+                const note=`✅ Follow-up concluído${fuInfo?` (${fuInfo})`:""}: ${concluiObs.trim()}`;
+                const entry={id:uid(),lead_id:lead.id,type:"Anotação",note,date:new Date().toISOString()};
+                await supabase.from("lead_history").insert(entry);
+                await supabase.from("leads").update({follow_up_date:null,follow_up_note:null,follow_up_time:null}).eq("id",lead.id);
+                onUpdate({...lead,followUp:null,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});
+                setFu({date:"",note:"",time:""});
+                setConcluiModal(false);
+              }} className="tap"
+                style={{flex:2,background:"#e85d20",border:"none",borderRadius:11,padding:"12px",fontSize:14,fontWeight:700,color:"white",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:"0 4px 16px rgba(232,93,32,.35)"}}>
+                ✅ Salvar e Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Next cadencia suggestion modal */}
+      {nextCadModal&&(
+        <div onClick={e=>e.target===e.currentTarget&&setNextCadModal(null)}
+          style={{position:"fixed",inset:0,background:"rgba(26,23,20,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:20,backdropFilter:"blur(4px)"}}>
+          <div style={{background:"white",borderRadius:20,padding:"28px 32px",width:"100%",maxWidth:440,boxShadow:"0 8px 40px rgba(0,0,0,.2)",animation:"fadeUp .2s"}}>
+            <div style={{textAlign:"center",marginBottom:20}}>
+              <div style={{width:48,height:48,borderRadius:24,background:nextCadModal.color+"20",border:`2px solid ${nextCadModal.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,margin:"0 auto 12px"}}>📅</div>
+              <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700,color:"#111",marginBottom:4}}>Agendar próximo contato?</div>
+              <div style={{fontSize:14,color:"#888"}}>Etapa {nextCadModal.step}/7 — <strong style={{color:nextCadModal.color}}>{nextCadModal.label}</strong></div>
+              <div style={{fontSize:13,color:"#aaa",marginTop:4}}>{nextCadModal.desc}</div>
+            </div>
+            <div style={{display:"grid",gap:12,marginBottom:20}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <label style={{display:"block"}}>
+                  <span style={{display:"block",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Data sugerida</span>
+                  <input type="date" value={nextCadModal.suggestedDate}
+                    onChange={e=>setNextCadModal(p=>({...p,suggestedDate:e.target.value}))}
+                    style={{width:"100%",background:"#f8f8f8",border:"1.5px solid #e8e8e8",borderRadius:10,padding:"11px 12px",fontSize:15,color:"#111",outline:"none",fontFamily:"'DM Sans',sans-serif"}}/>
+                </label>
+                <label style={{display:"block"}}>
+                  <span style={{display:"block",fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Horário *</span>
+                  <input type="time" value={nextCadModal.suggestedTime||""}
+                    onChange={e=>setNextCadModal(p=>({...p,suggestedTime:e.target.value}))}
+                    style={{width:"100%",background:"#f8f8f8",border:"1.5px solid #e8e8e8",borderRadius:10,padding:"11px 12px",fontSize:15,color:"#111",outline:"none",fontFamily:"'DM Sans',sans-serif"}}/>
+                </label>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={async()=>{
+                if(!nextCadModal.suggestedDate||!nextCadModal.suggestedTime){alert('Informe a data e o horário.');return;}
+                await supabase.from("leads").update({
+                  follow_up_date:nextCadModal.suggestedDate,
+                  follow_up_note:`${nextCadModal.step}° ${nextCadModal.label}`,
+                  follow_up_time:nextCadModal.suggestedTime||null
+                }).eq("id",lead.id);
+                onUpdate({...lead,
+                  cadenciaStep:nextCadModal.step-1,
+                  followUp:{date:nextCadModal.suggestedDate,note:`${nextCadModal.step}° ${nextCadModal.label}`,time:nextCadModal.suggestedTime||""}
+                });
+                setNextCadModal(null);
+              }} className="tap"
+                style={{flex:1,background:nextCadModal.color,border:"none",borderRadius:11,padding:"12px",fontSize:14,fontWeight:700,color:"white",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:`0 4px 16px ${nextCadModal.color}44`}}>
+                ✓ Confirmar agendamento
+              </button>
+            </div>
           </div>
         </div>
       )}
