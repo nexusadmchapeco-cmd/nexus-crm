@@ -563,7 +563,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
 
   const ts=today();
   const todaySlots=slots.filter(s=>s.date===ts&&s.status!=="cancelado").sort((a,b)=>a.time.localeCompare(b.time));
-  const availLeads=leads.filter(l=>!["matriculado","perdido","naoqualif"].includes(l.stage));
+  const availLeads=leads.filter(l=>l.stage==="reuniao");
 
   const statusColor={agendado:T.gold,confirmado:T.accent,cancelado:"#dc2626"};
 
