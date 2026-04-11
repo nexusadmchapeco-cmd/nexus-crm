@@ -1761,8 +1761,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
               await supabase.from("leads").update({follow_up_date:null,follow_up_note:null,follow_up_time:null}).eq("id",lead.id);
               onUpdate({...lead,followUp:null,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});
               setFu({date:"",note:"",time:""});
-            }}>✅ Concluído</Btn>
-            </>}
+            }}>✅ Concluído</Btn>}
             <Btn variant="gold" onClick={saveFu} full={mob}>💾 Salvar follow-up</Btn>
           </div>
         </div>
