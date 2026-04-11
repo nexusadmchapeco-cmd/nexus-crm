@@ -926,13 +926,22 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         </div>
         <Btn onClick={onQuickAdd}>⚡ Novo Lead</Btn>
       </div>
-      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
         {UNITS.map(u=>(
           <div key={u.id} style={{background:u.color,border:`1px solid ${u.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:u.text,display:"flex",alignItems:"center",gap:5}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:u.text,opacity:.6}}/>
             {u.label}
           </div>
         ))}
+      </div>
+      {/* Filtros */}
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar por nome..." style={{background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"9px 14px",fontSize:14,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",width:220}}/>
+        <select value={filterUnit} onChange={e=>setFilterUnit(e.target.value)} style={{background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:filterUnit?T.text:T.muted,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>
+          <option value="">Todas as unidades</option>
+          {UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
+        </select>
+        {(search||filterUnit)&&<button onClick={()=>{setSearch("");setFilterUnit("");}} className="tap gh" style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✕ Limpar</button>}
       </div>
       {/* SDR */}
       <div style={{marginBottom:12}}>
