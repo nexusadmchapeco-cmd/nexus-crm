@@ -30,6 +30,16 @@ const UNITS = [
   { id:"chape",  label:"Nexus Chapecó", color:"#ffedd5", border:"#fdba74", text:"#c2410c" },
   { id:"online", label:"Nexus Online",  color:"#dcfce7", border:"#86efac", text:"#15803d" },
 ];
+const CADENCIA = [
+  { step:1, label:"1° Contato",        desc:"Atendimento padrão",                    day:0,  role:"sdr",    color:"#6366f1" },
+  { step:2, label:"Retomar (mesmo dia)",desc:"Vacuo — retomar no mesmo dia",          day:0,  role:"sdr",    color:"#8b5cf6" },
+  { step:3, label:"Retomar (dia 1)",    desc:"Retomar contato no dia seguinte",       day:1,  role:"sdr",    color:"#a78bfa" },
+  { step:4, label:"Outra forma",        desc:"Oferecer outra forma de contato",       day:3,  role:"sdr",    color:"#f59e0b" },
+  { step:5, label:"Aula Experimental",  desc:"Oferecer aula experimental gratuita",   day:5,  role:"sdr",    color:"#10b981" },
+  { step:6, label:"Retirar da lista",   desc:"Avisar que vai retirar dos interessados",day:7, role:"sdr",    color:"#ef4444" },
+  { step:7, label:"Guardar contato",    desc:"Guardar pra promoções futuras",         day:14, role:"sdr",    color:"#6b7280" },
+];
+
 const NAV_ITEMS = [
   { id:"pipeline",   icon:"◫", label:"Pipeline"  },
   { id:"agenda",     icon:"📅", label:"Agenda"    },
@@ -823,8 +833,15 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const [celebrating,setCelebrating]=useState(false);
   const [reuniaoCelebrating,setReuniaoCelebrating]=useState(false);
   const [activeStage,setActiveStage]=useState("novo");
+  const [search,setSearch]=useState("");
+  const [filterUnit,setFilterUnit]=useState("");
   const dragging=useRef(null);
   const ts=today();
+  const filteredLeads=leads.filter(l=>{
+    const matchSearch=!search||l.name.toLowerCase().includes(search.toLowerCase())||l.phone.includes(search);
+    const matchUnit=!filterUnit||l.unit===filterUnit;
+    return matchSearch&&matchUnit;
+  });
   const sdrStages=STAGES.filter(s=>s.role==="sdr");
   const closerStages=STAGES.filter(s=>s.role==="closer");
 
@@ -846,6 +863,20 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         {lead.responsavel&&<div style={{fontSize:11,color:T.accent,marginBottom:2}}>👤 {lead.responsavel}</div>}
         {stage.id==="listafria"&&<div style={{fontSize:10,color:"#7dd3fc",fontWeight:600,marginBottom:2}}>🧊 Retomar contato</div>}
         {(isTd||ov)&&<div style={{background:ov?"#fef2f2":"#fefce8",color:ov?"#b91c1c":"#92400e",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700,marginTop:4,display:"inline-block"}}>{ov?"⚠ Atrasado":"🔔 Hoje"}</div>}
+        {lead.cadenciaStep>0&&(()=>{
+          const cad=CADENCIA.find(c=>c.step===lead.cadenciaStep);
+          if(!cad)return null;
+          const started=lead.cadenciaStarted?new Date(lead.cadenciaStarted):null;
+          const nextStep=CADENCIA.find(c=>c.step===lead.cadenciaStep+1);
+          const deadlineDay=nextStep?nextStep.day:cad.day+7;
+          const deadline=started?new Date(started.getTime()+(deadlineDay*24*60*60*1000)):null;
+          const isLate=deadline&&new Date()>deadline;
+          return(
+            <div style={{background:isLate?"#fef2f2":cad.color+"18",border:`1px solid ${isLate?"#fecaca":cad.color+"44"}`,borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,marginTop:4,color:isLate?"#dc2626":cad.color,display:"flex",alignItems:"center",gap:4}}>
+              {isLate?"⚠":"▶"} {cad.step}/7 {cad.label}{isLate?" — ATRASADO":""}
+            </div>
+          );
+        })()}
       </div>
     );
   };
@@ -860,6 +891,13 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:26,fontWeight:400}}>Pipeline</h1>
           <Btn onClick={onQuickAdd} style={{padding:"8px 14px",fontSize:13}}>⚡ Novo Lead</Btn>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar lead..." style={{flex:1,background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:14,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"}}/>
+          <select value={filterUnit} onChange={e=>setFilterUnit(e.target.value)} style={{background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"9px 10px",fontSize:13,color:T.muted,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>
+            <option value="">Todas</option>
+            {UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
+          </select>
         </div>
         <div style={{display:"flex",gap:7,overflowX:"auto",paddingBottom:10,marginBottom:16,WebkitOverflowScrolling:"touch"}}>
           {STAGES.map(s=>{const cnt=leads.filter(l=>l.stage===s.id).length,on=s.id===activeStage;return(
@@ -904,7 +942,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         </div>
         <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
           {sdrStages.map(stage=>{
-            const sl=leads.filter(l=>l.stage===stage.id),over=dragOver===stage.id;
+            const sl=filteredLeads.filter(l=>l.stage===stage.id),over=dragOver===stage.id;
             return (
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
@@ -932,7 +970,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         </div>
         <div style={{display:"flex",gap:10,paddingBottom:8,alignItems:"flex-start"}}>
           {closerStages.map(stage=>{
-            const sl=leads.filter(l=>l.stage===stage.id),over=dragOver===stage.id;
+            const sl=filteredLeads.filter(l=>l.stage===stage.id),over=dragOver===stage.id;
             return (
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
@@ -1094,26 +1132,109 @@ function LeadsList({leads,onSelect,onAdd,mob}) {
 /* ─── FOLLOW-UPS ─────────────────────────────────────────────────── */
 function FollowUps({leads,onSelect,mob}) {
   const ts=today();
-  const ov=leads.filter(l=>l.followUp?.date&&l.followUp.date<ts).sort((a,b)=>a.followUp.date.localeCompare(b.followUp.date));
-  const td=leads.filter(l=>l.followUp?.date===ts);
-  const up=leads.filter(l=>l.followUp?.date&&l.followUp.date>ts).sort((a,b)=>a.followUp.date.localeCompare(b.followUp.date));
+  const [roleFilter,setRoleFilter]=useState("sdr"); // "sdr" | "closer"
+  const [viewMode,setViewMode]=useState("followup"); // "followup" | "cadencia"
+
+  // Follow-up leads
+  const sdrStages=["novo","contato","info","qualificado","naoqualif","reuniao"];
+  const closerStages=["negociacao","listafria","matriculado","perdido"];
+
+  const sdrLeads=leads.filter(l=>sdrStages.includes(l.stage));
+  const closerLeads=leads.filter(l=>closerStages.includes(l.stage));
+  const roleLeads=roleFilter==="sdr"?sdrLeads:closerLeads;
+
+  const ov=roleLeads.filter(l=>l.followUp?.date&&l.followUp.date<ts).sort((a,b)=>a.followUp.date.localeCompare(b.followUp.date));
+  const td=roleLeads.filter(l=>l.followUp?.date===ts);
+  const up=roleLeads.filter(l=>l.followUp?.date&&l.followUp.date>ts).sort((a,b)=>a.followUp.date.localeCompare(b.followUp.date));
+
+  // Cadencia leads - SDR only, not yet completed all steps
+  const cadLeads=leads.filter(l=>sdrStages.includes(l.stage)&&l.cadenciaStep>0&&l.cadenciaStep<7);
+  const cadLate=leads.filter(l=>{
+    if(!sdrStages.includes(l.stage)||!l.cadenciaStep||l.cadenciaStep===0)return false;
+    const cad=CADENCIA.find(c=>c.step===l.cadenciaStep);
+    const nextStep=CADENCIA.find(c=>c.step===l.cadenciaStep+1);
+    if(!cad||!l.cadenciaStarted)return false;
+    const deadlineDay=nextStep?nextStep.day:cad.day+7;
+    const deadline=new Date(new Date(l.cadenciaStarted).getTime()+(deadlineDay*24*60*60*1000));
+    return new Date()>deadline;
+  });
+
+  const CadCard=({lead})=>{
+    const cad=CADENCIA.find(c=>c.step===lead.cadenciaStep);
+    const nextCad=CADENCIA.find(c=>c.step===lead.cadenciaStep+1);
+    const started=lead.cadenciaStarted?new Date(lead.cadenciaStarted):null;
+    const deadlineDay=nextCad?nextCad.day:14;
+    const deadline=started?new Date(started.getTime()+(deadlineDay*24*60*60*1000)):null;
+    const isLate=deadline&&new Date()>deadline;
+    const daysLeft=deadline?Math.ceil((deadline-new Date())/(1000*60*60*24)):null;
+    const st=STAGES.find(s=>s.id===lead.stage);
+    const unit=UNITS.find(u=>u.id===lead.unit);
+    return(
+      <div onClick={()=>onSelect(lead)} className="c-hover"
+        style={{background:T.surface,border:`1.5px solid ${isLate?"#fecaca":T.border}`,borderRadius:T.radius,padding:"14px 16px",cursor:"pointer",borderLeft:`4px solid ${isLate?"#ef4444":cad?.color||T.accent}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:15}}>{lead.name}</div>
+            <div style={{fontSize:12,color:T.muted,marginTop:2}}>{lead.phone} · {lead.course||"—"}</div>
+          </div>
+          <div style={{display:"flex",gap:6,flexDirection:"column",alignItems:"flex-end"}}>
+            {unit&&<span style={{fontSize:10,fontWeight:700,color:unit.text,background:unit.color,borderRadius:5,padding:"2px 7px"}}>{unit.label}</span>}
+            <Pill color={st?.hex}>{st?.label}</Pill>
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div style={{marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.muted,marginBottom:4}}>
+            <span>Etapa {lead.cadenciaStep} de 7</span>
+            <span style={{fontWeight:700,color:isLate?"#dc2626":cad?.color}}>{cad?.label}</span>
+          </div>
+          <div style={{background:T.bg,borderRadius:20,height:6,overflow:"hidden"}}>
+            <div style={{width:`${(lead.cadenciaStep/7)*100}%`,height:"100%",background:isLate?"#ef4444":cad?.color,borderRadius:20,transition:"width .3s"}}/>
+          </div>
+        </div>
+        {/* Steps mini */}
+        <div style={{display:"flex",gap:3,marginBottom:8}}>
+          {CADENCIA.map(c=>(
+            <div key={c.step} style={{flex:1,height:4,borderRadius:2,background:c.step<=lead.cadenciaStep?c.color:T.border}}/>
+          ))}
+        </div>
+        {/* Next action */}
+        {nextCad&&<div style={{background:isLate?"#fef2f2":nextCad.color+"12",border:`1px solid ${isLate?"#fecaca":nextCad.color+"30"}`,borderRadius:8,padding:"8px 10px",fontSize:12}}>
+          <div style={{fontWeight:700,color:isLate?"#dc2626":nextCad.color}}>
+            {isLate?"⚠ ATRASADO — ":"📍 Próximo: "}{nextCad.label}
+          </div>
+          <div style={{color:T.muted,marginTop:2}}>{nextCad.desc}</div>
+          {deadline&&<div style={{fontSize:11,marginTop:4,fontWeight:600,color:isLate?"#dc2626":T.muted}}>
+            {isLate?`${Math.abs(daysLeft)} dias atrasado`:`${Math.max(0,daysLeft)} dias restantes`}
+          </div>}
+        </div>}
+        {!nextCad&&lead.cadenciaStep===7&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"8px 10px",fontSize:12,color:"#15803d",fontWeight:600}}>✅ Cadência completa</div>}
+      </div>
+    );
+  };
+
   const Sec=({title,color,items,empty})=>(
     <div style={{marginBottom:22}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-        <h2 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?20:22,fontWeight:400,color}}>{title}</h2>
+        <h2 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?18:20,fontWeight:700,color}}>{title}</h2>
         <span style={{background:color+"18",color,borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700}}>{items.length}</span>
       </div>
-      {items.length===0?<div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:24,textAlign:"center",color:T.muted}}>{empty}</div>
+      {items.length===0?<div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:24,textAlign:"center",color:T.muted,fontSize:14}}>{empty}</div>
       :<div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {items.map(l=>{const st=STAGES.find(s=>s.id===l.stage);return(
+        {items.map(l=>{const st=STAGES.find(s=>s.id===l.stage),ov2=l.followUp?.date&&l.followUp.date<ts,isTd2=l.followUp?.date===ts,unit=UNITS.find(u=>u.id===l.unit);return(
           <div key={l.id} className="c-hover" onClick={()=>onSelect(l)} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:"14px 16px",cursor:"pointer",borderLeft:`3px solid ${color}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:6}}>
               <div style={{fontWeight:700,fontSize:15}}>{l.name}</div>
-              <span style={{fontSize:12,fontWeight:700,color}}>{l.followUp.date}</span>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{fontSize:12,fontWeight:700,color}}>{l.followUp.date}{l.followUp.time?` às ${l.followUp.time}`:""}</span>
+              </div>
             </div>
             <div style={{fontSize:13,color:T.muted,marginBottom:8}}>{l.phone} · {l.course||"—"}</div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
-              <Pill color={st?.hex}>{st?.label}</Pill>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <Pill color={st?.hex}>{st?.label}</Pill>
+                {unit&&<span style={{fontSize:11,fontWeight:700,color:unit.text,background:unit.color,border:`1px solid ${unit.border}`,borderRadius:6,padding:"2px 8px"}}>{unit.label}</span>}
+              </div>
               {l.followUp.note&&<span style={{fontSize:12,color:T.muted,fontStyle:"italic"}}>"{l.followUp.note}"</span>}
             </div>
           </div>
@@ -1121,15 +1242,76 @@ function FollowUps({leads,onSelect,mob}) {
       </div>}
     </div>
   );
+
   return (
     <div style={{animation:"fadeUp .3s"}}>
       <div style={{marginBottom:20}}>
-        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:400}}>Follow-ups</h1>
-        <p style={{color:T.muted,fontSize:13,marginTop:3}}>Seus contatos agendados</p>
+        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:700,letterSpacing:"-.5px"}}>Follow-up</h1>
+        <p style={{color:T.muted,fontSize:13,marginTop:4}}>Acompanhe os contatos e a cadência</p>
       </div>
-      <Sec title="Atrasados" color="#dc2626" items={ov} empty="Nenhum follow-up atrasado 🎉"/>
-      <Sec title="Hoje" color={T.gold} items={td} empty="Nenhum follow-up para hoje."/>
-      <Sec title="Próximos" color={T.accent} items={up} empty="Nenhum follow-up futuro agendado."/>
+
+      {/* Mode + Role filter */}
+      <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:4,background:T.bg,borderRadius:10,padding:4,border:`1px solid ${T.border}`}}>
+          {[["followup","📅 Follow-ups"],["cadencia","🔄 Cadência"]].map(([id,lbl])=>(
+            <button key={id} onClick={()=>setViewMode(id)} className="tap"
+              style={{background:viewMode===id?T.accent:"transparent",color:viewMode===id?"white":T.muted,border:"none",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        {viewMode==="followup"&&<div style={{display:"flex",gap:4,background:T.bg,borderRadius:10,padding:4,border:`1px solid ${T.border}`}}>
+          {[["sdr","SDR"],["closer","Closer"]].map(([id,lbl])=>(
+            <button key={id} onClick={()=>setRoleFilter(id)} className="tap"
+              style={{background:roleFilter===id?"#111":"transparent",color:roleFilter===id?"white":T.muted,border:"none",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+              {lbl}
+            </button>
+          ))}
+        </div>}
+        {viewMode==="cadencia"&&cadLate.length>0&&(
+          <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,color:"#dc2626",display:"flex",alignItems:"center",gap:6}}>
+            ⚠ {cadLate.length} lead(s) com cadência atrasada!
+          </div>
+        )}
+      </div>
+
+      {viewMode==="followup"&&<>
+        <Sec title="Atrasados" color="#dc2626" items={ov} empty="Nenhum follow-up atrasado 🎉"/>
+        <Sec title="Hoje" color={T.gold} items={td} empty="Nenhum follow-up para hoje."/>
+        <Sec title="Próximos" color={T.accent} items={up} empty="Nenhum follow-up futuro agendado."/>
+        {ov.length===0&&td.length===0&&up.length===0&&(
+          <div style={{textAlign:"center",padding:60,color:T.muted}}>
+            <div style={{fontSize:40,marginBottom:12}}>✅</div>
+            <div style={{fontSize:16,fontWeight:600}}>Nenhum follow-up pendente para o {roleFilter==="sdr"?"SDR":"Closer"}!</div>
+          </div>
+        )}
+      </>}
+
+      {viewMode==="cadencia"&&<>
+        {cadLate.length>0&&<div style={{marginBottom:20}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+            <h2 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?18:20,fontWeight:700,color:"#dc2626"}}>⚠ Atrasados</h2>
+            <span style={{background:"#fef2f2",color:"#dc2626",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700}}>{cadLate.length}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {cadLate.map(l=><CadCard key={l.id} lead={l}/>)}
+          </div>
+        </div>}
+        {cadLeads.filter(l=>!cadLate.find(x=>x.id===l.id)).length>0&&<div style={{marginBottom:20}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+            <h2 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?18:20,fontWeight:700,color:T.accent}}>Em andamento</h2>
+            <span style={{background:T.accentLight,color:T.accent,borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700}}>{cadLeads.filter(l=>!cadLate.find(x=>x.id===l.id)).length}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {cadLeads.filter(l=>!cadLate.find(x=>x.id===l.id)).map(l=><CadCard key={l.id} lead={l}/>)}
+          </div>
+        </div>}
+        {cadLeads.length===0&&<div style={{textAlign:"center",padding:60,color:T.muted}}>
+          <div style={{fontSize:40,marginBottom:12}}>🔄</div>
+          <div style={{fontSize:16,fontWeight:600}}>Nenhum lead em cadência ativa.</div>
+          <div style={{fontSize:13,marginTop:8}}>Inicie a cadência pelo card do lead na aba Histórico.</div>
+        </div>}
+      </>}
     </div>
   );
 }
@@ -1428,7 +1610,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const ts=today(),st=STAGES.find(s=>s.id===lead.stage);
 
-  const saveInfo=async()=>{setSaving(true);await supabase.from("leads").update({name:form.name,phone:form.phone,email:form.email,course:form.course,source:form.source,notes:form.notes,responsavel:form.responsavel||null,unit:form.unit||null}).eq("id",lead.id);onUpdate({...lead,...form});setEditing(false);setSaving(false);};
+  const saveInfo=async()=>{setSaving(true);await supabase.from("leads").update({name:form.name,phone:form.phone,email:form.email,course:form.course,source:form.source,notes:form.notes,responsavel:form.responsavel||null,unit:form.unit||null}).eq("id",lead.id);onUpdate({...lead,...form,cadenciaStep:lead.cadenciaStep,cadenciaStarted:lead.cadenciaStarted});setEditing(false);setSaving(false);};
   const changeStage=async(id)=>{await supabase.from("leads").update({stage:id}).eq("id",lead.id);onUpdate({...lead,stage:id});};
   const addHist=async()=>{if(!hist.note.trim())return;const entry={id:uid(),lead_id:lead.id,type:hist.type,note:hist.note,date:new Date().toISOString()};await supabase.from("lead_history").insert(entry);onUpdate({...lead,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});setHist({type:"WhatsApp",note:""});};
   const saveFu=async()=>{await supabase.from("leads").update({follow_up_date:fu.date||null,follow_up_note:fu.note||null,follow_up_time:fu.time||null}).eq("id",lead.id);onUpdate({...lead,followUp:fu.date?{...fu}:null});};
@@ -1507,14 +1689,19 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
             <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Cadência de contatos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
               {[
-                {n:"1°",label:"Primeiro Contato",color:"#6366f1",msg:"Olá! Vi que você se interessou pela Nexus English Center. Posso te contar mais sobre nossos cursos?"},
-                {n:"2°",label:"Retomar Contato",color:"#8b5cf6",msg:"Oi! Passando para retomar contato. Teve chance de pensar nos nossos cursos de inglês?"},
-                {n:"3°",label:"Oferecer Ligação",color:"#f59e0b",msg:"Olá! Que tal uma ligação rápida para tirar suas dúvidas sobre o curso?"},
-                {n:"4°",label:"Aula Experimental",color:"#10b981",msg:"Oi! Gostaria de te convidar para uma aula experimental gratuita na Nexus!"},
-                {n:"5°",label:"Último Aviso",color:"#ef4444",msg:"Olá! Vou encerrar nossos contatos em breve. Ainda tem interesse em aprender inglês?"},
-                {n:"6°",label:"Encerrar Contato",color:"#6b7280",msg:"Oi! Estou encerrando sua lista de contatos. Posso te enviar promoções futuramente?"},
+                ...CADENCIA.map(c=>({n:`${c.step}°`,label:c.label,color:c.color,msg:c.desc,step:c.step})),
               ].map(c=>(
-                <button key={c.n} className="tap" onClick={()=>setHist({type:"WhatsApp",note:`[${c.n} ${c.label}] ${c.msg}`})}
+                <button key={c.n} className="tap" onClick={async()=>{
+                  setHist({type:"WhatsApp",note:`[${c.n} ${c.label}] ${c.msg||""}`});
+                  // Update cadencia step if this step is >= current
+                  if(c.step&&c.step>=(lead.cadenciaStep||0)){
+                    const now=new Date().toISOString();
+                    const updates={cadencia_step:c.step};
+                    if(!lead.cadenciaStarted||c.step===1)updates.cadencia_started_at=now;
+                    await supabase.from("leads").update(updates).eq("id",lead.id);
+                    onUpdate({...lead,cadenciaStep:c.step,cadenciaStarted:lead.cadenciaStarted||now});
+                  }
+                }}
                   style={{background:c.color+"15",border:`1.5px solid ${c.color}44`,borderRadius:9,padding:"8px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
                   <div style={{fontSize:11,fontWeight:800,color:c.color}}>{c.n}</div>
                   <div style={{fontSize:10,fontWeight:600,color:T.text,marginTop:2,lineHeight:1.3}}>{c.label}</div>
@@ -1598,7 +1785,7 @@ function Sidebar({active,onChange,fuCount,waUnread,onLogout,userEmail}) {
             <button key={item.id} onClick={()=>onChange(item.id)} className="nav-itm tap"
               style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:"none",borderLeft:on?"3px solid #e85d20":"3px solid transparent",background:on?"rgba(232,93,32,.12)":"transparent",color:on?"#e85d20":"rgba(255,255,255,.5)",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:on?700:500,textAlign:"left",transition:"all .15s"}}>
               <span style={{fontSize:16}}>{item.icon}</span>{item.label}
-              {item.id==="followups"&&fuCount>0&&<span style={{marginLeft:"auto",background:T.gold,color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{fuCount}</span>}
+              {item.id==="followups"&&(fuCount+cadLateTotal)>0&&<span style={{marginLeft:"auto",background:cadLateTotal>0?"#ef4444":T.gold,color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{fuCount+cadLateTotal}</span>}
               {item.id==="whatsapp"&&waUnread>0&&<span style={{marginLeft:"auto",background:"#25d366",color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{waUnread}</span>}
             </button>
           );})}
@@ -1657,7 +1844,7 @@ export default function App() {
       (waUnread||[]).forEach(m=>{if(m.lead_id)unreadMap[m.lead_id]=(unreadMap[m.lead_id]||0)+1;});
       setLeads((ld||[]).map(l=>({
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
-        stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,
+        stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,
         followUp:l.follow_up_date?{date:l.follow_up_date,note:l.follow_up_note||""}:null,
         history:(hd||[]).filter(h=>h.lead_id===l.id).map(h=>({id:h.id,type:h.type,note:h.note,date:h.date})),
         unreadCount:unreadMap[l.id]||0,
@@ -1675,6 +1862,16 @@ export default function App() {
   const ts=today();
   const fuCount=leads.filter(l=>l.followUp?.date&&l.followUp.date<=ts).length;
   const waUnreadTotal=leads.reduce((sum,l)=>sum+(l.unreadCount||0),0);
+  const sdrStages2=["novo","contato","info","qualificado","naoqualif","reuniao"];
+  const cadLateTotal=leads.filter(l=>{
+    if(!sdrStages2.includes(l.stage)||!l.cadenciaStep||l.cadenciaStep===0||l.cadenciaStep>=7)return false;
+    const cad=CADENCIA.find(c=>c.step===l.cadenciaStep);
+    const nextCad=CADENCIA.find(c=>c.step===l.cadenciaStep+1);
+    if(!cad||!l.cadenciaStarted)return false;
+    const deadlineDay=nextCad?nextCad.day:14;
+    const deadline=new Date(new Date(l.cadenciaStarted).getTime()+(deadlineDay*24*60*60*1000));
+    return new Date()>deadline;
+  }).length;
 
   if(authLoading)return(<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.bg}}><Spinner/></div>);
   if(!session)return(<><GlobalStyles/><LoginScreen/></>);
