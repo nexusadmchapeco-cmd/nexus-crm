@@ -1688,13 +1688,12 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
           <div style={{marginBottom:4}}>
             <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Cadência de contatos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-              {[
-                ...CADENCIA.map(c=>({n:`${c.step}°`,label:c.label,color:c.color,msg:c.desc,step:c.step})),
-              ].map(c=>(
-                <button key={c.n} className="tap" onClick={async()=>{
-                  setHist({type:"WhatsApp",note:`[${c.n} ${c.label}] ${c.msg||""}`});
-                  // Update cadencia step if this step is >= current
-                  if(c.step&&c.step>=(lead.cadenciaStep||0)){
+              {CADENCIA.map(c=>{
+                const n=`${c.step}°`;
+                return(
+                <button key={c.step} className="tap" onClick={async()=>{
+                  setHist({type:"WhatsApp",note:`[${n} ${c.label}] ${c.desc}`});
+                  if(c.step>=(lead.cadenciaStep||0)){
                     const now=new Date().toISOString();
                     const updates={cadencia_step:c.step};
                     if(!lead.cadenciaStarted||c.step===1)updates.cadencia_started_at=now;
@@ -1703,10 +1702,10 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
                   }
                 }}
                   style={{background:c.color+"15",border:`1.5px solid ${c.color}44`,borderRadius:9,padding:"8px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
-                  <div style={{fontSize:11,fontWeight:800,color:c.color}}>{c.n}</div>
+                  <div style={{fontSize:11,fontWeight:800,color:c.color}}>{n}</div>
                   <div style={{fontSize:10,fontWeight:600,color:T.text,marginTop:2,lineHeight:1.3}}>{c.label}</div>
                 </button>
-              ))}
+              );})}
             </div>
           </div>
           <div style={{display:"flex",flexDirection:mob?"column":"row",gap:10,marginBottom:16,alignItems:mob?"stretch":"flex-end"}}>
@@ -1771,7 +1770,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
 }
 
 /* ─── SIDEBAR ────────────────────────────────────────────────────── */
-function Sidebar({active,onChange,fuCount,waUnread,onLogout,userEmail}) {
+function Sidebar({active,onChange,fuCount,waUnread,cadLate,onLogout,userEmail}) {
   return (
     <aside style={{width:220,background:"#111111",display:"flex",flexDirection:"column",height:"100vh",position:"sticky",top:0,flexShrink:0}}>
       <div style={{padding:"24px 20px 16px"}}>
@@ -1785,7 +1784,7 @@ function Sidebar({active,onChange,fuCount,waUnread,onLogout,userEmail}) {
             <button key={item.id} onClick={()=>onChange(item.id)} className="nav-itm tap"
               style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:"none",borderLeft:on?"3px solid #e85d20":"3px solid transparent",background:on?"rgba(232,93,32,.12)":"transparent",color:on?"#e85d20":"rgba(255,255,255,.5)",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:on?700:500,textAlign:"left",transition:"all .15s"}}>
               <span style={{fontSize:16}}>{item.icon}</span>{item.label}
-              {item.id==="followups"&&(fuCount+cadLateTotal)>0&&<span style={{marginLeft:"auto",background:cadLateTotal>0?"#ef4444":T.gold,color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{fuCount+cadLateTotal}</span>}
+              {item.id==="followups"&&(fuCount+cadLate)>0&&<span style={{marginLeft:"auto",background:cadLate>0?"#ef4444":T.gold,color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{fuCount+cadLate}</span>}
               {item.id==="whatsapp"&&waUnread>0&&<span style={{marginLeft:"auto",background:"#25d366",color:"white",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{waUnread}</span>}
             </button>
           );})}
@@ -1806,7 +1805,7 @@ function BottomNav({active,onChange,fuCount,waUnread}) {
           style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"10px 4px 8px",border:"none",background:"transparent",color:on?"#e85d20":"rgba(255,255,255,.4)",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:9,fontWeight:on?700:500,transition:"color .15s",position:"relative"}}>
           <span style={{fontSize:18,lineHeight:1}}>{item.icon}</span>
           {item.label}
-          {item.id==="followups"&&fuCount>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 18px)",background:T.gold,color:"white",borderRadius:10,padding:"0 5px",fontSize:9,fontWeight:700,lineHeight:"16px"}}>{fuCount}</span>}
+          {item.id==="followups"&&(fuCount+waUnread)>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 18px)",background:waUnread>0?"#ef4444":T.gold,color:"white",borderRadius:10,padding:"0 5px",fontSize:9,fontWeight:700,lineHeight:"16px"}}>{fuCount}</span>}
           {item.id==="whatsapp"&&waUnread>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 18px)",background:"#25d366",color:"white",borderRadius:10,padding:"0 5px",fontSize:9,fontWeight:700,lineHeight:"16px"}}>{waUnread}</span>}
         </button>
       );})}
@@ -1880,7 +1879,7 @@ export default function App() {
     <>
       <GlobalStyles/>
       <div style={{display:"flex",minHeight:"100vh"}}>
-        {!mob&&<Sidebar active={page} onChange={nav} fuCount={fuCount} waUnread={waUnreadTotal} onLogout={logout} userEmail={session.user.email}/>}
+        {!mob&&<Sidebar active={page} onChange={nav} fuCount={fuCount} waUnread={waUnreadTotal} cadLate={cadLateTotal} onLogout={logout} userEmail={session.user.email}/>}
         <main style={{flex:1,padding:mob?"18px 16px 90px":"36px 40px",overflowY:"auto",minHeight:"100vh"}}>
           {mob&&(
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
