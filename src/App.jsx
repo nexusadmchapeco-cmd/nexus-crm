@@ -1895,11 +1895,9 @@ function AgenteIA({leads, mob}) {
     const fuAtrasados = leads.filter(l=>l.followUp?.date&&l.followUp.date<ts).length;
     const fuHoje = leads.filter(l=>l.followUp?.date===ts).length;
     const taxa = total>0?Math.round((matr/total)*100):0;
-    const porUnidade = {
-      pf: leads.filter(l=>l.unit==="pf").length,
-      chape: leads.filter(l=>l.unit==="chape").length,
-      online: leads.filter(l=>l.unit==="online").length,
-    };
+    const pfCount = leads.filter(l=>l.unit==="pf").length;
+    const chapeCount = leads.filter(l=>l.unit==="chape").length;
+    const onlineCount = leads.filter(l=>l.unit==="online").length;
     const porOrigem = {};
     leads.forEach(l=>{ if(l.source) porOrigem[l.source]=(porOrigem[l.source]||0)+1; });
     const cadAtrasados = leads.filter(l=>{
@@ -1911,45 +1909,52 @@ function AgenteIA({leads, mob}) {
       const deadline=new Date(new Date(l.cadenciaStarted).getTime()+(deadlineDay*24*60*60*1000));
       return new Date()>deadline;
     }).length;
-    const recentes = [...leads]
-      .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
-      .slice(0,5)
-      .map(l=>l.name+" ("+(STAGES.find(s=>s.id===l.stage)?.label||l.stage)+", "+(l.unit||"sem unidade")+", "+(l.course||"sem curso")+")")
-      .join("
-");
-    const negLeads = leads.filter(l=>l.stage==="negociacao")
-      .map(l=>l.name+" - "+(l.course||"sem curso")+" - "+(l.unit||"sem unidade"))
-      .join("
-");
-    const origemStr = Object.entries(porOrigem).map(([k,v])=>"- "+k+": "+v).join("
-");
     const hoje = new Date().toLocaleDateString("pt-BR");
-
-    return "Voce e um assistente de vendas especializado da Nexus English Center, uma escola de ingles brasileira com unidades em Chapeco (chape), Passo Fundo (pf) e Online.\n\n"
-      + "DADOS ATUAIS DO CRM (" + hoje + "):\n\n"
-      + "RESUMO GERAL:\n"
-      + "- Total de leads: " + total + "\n"
-      + "- Matriculados: " + matr + " (taxa de conversao: " + taxa + "%)\n"
-      + "- Perdidos: " + perdidos + "\n"
-      + "- Em negociacao: " + emNeg + "\n"
-      + "- Reuniao agendada: " + reuniao + "\n"
-      + "- Novos leads: " + novos + "\n\n"
-      + "FOLLOW-UPS:\n"
-      + "- Atrasados: " + fuAtrasados + "\n"
-      + "- Para hoje: " + fuHoje + "\n"
-      + "- Cadencias atrasadas: " + cadAtrasados + "\n\n"
-      + "POR UNIDADE:\n"
-      + "- Nexus PF: " + porUnidade.pf + " leads\n"
-      + "- Nexus Chapeco: " + porUnidade.chape + " leads\n"
-      + "- Nexus Online: " + porUnidade.online + " leads\n\n"
-      + "POR ORIGEM:\n" + origemStr + "\n\n"
-      + "LEADS RECENTES:\n" + recentes + "\n\n"
-      + "LEADS EM NEGOCIACAO:\n" + (negLeads||"Nenhum lead em negociacao") + "\n\n"
-      + "ETAPAS DO PIPELINE: Novo Lead, Contato Feito, Informacoes Passadas, Qualificado, Nao Qualificado, Reuniao Agendada, Negociacao, Lista Fria, Matriculado, Perdido.\n\n"
-      + "CADENCIA DE CONTATOS (7 etapas): 1 Primeiro Contato dia 0, 2 Retomar mesmo dia, 3 Retomar dia 1, 4 Outra forma dia 3, 5 Aula Experimental dia 5, 6 Retirar da lista dia 7, 7 Guardar contato dia 14.\n\n"
-      + "Responda sempre em portugues brasileiro de forma objetiva e util. Use emojis quando apropriado. Forneca insights acionaveis baseados nos dados.";
-  }
-  };
+    const lines = [
+      "Voce e um assistente de vendas especializado da Nexus English Center.",
+      "Escola de ingles com unidades em Chapeco (chape), Passo Fundo (pf) e Online.",
+      "",
+      "DADOS DO CRM - " + hoje,
+      "",
+      "RESUMO:",
+      "- Total de leads: " + total,
+      "- Matriculados: " + matr + " (" + taxa + "% conversao)",
+      "- Perdidos: " + perdidos,
+      "- Em negociacao: " + emNeg,
+      "- Reuniao agendada: " + reuniao,
+      "- Novos leads: " + novos,
+      "",
+      "FOLLOW-UPS:",
+      "- Atrasados: " + fuAtrasados,
+      "- Para hoje: " + fuHoje,
+      "- Cadencias atrasadas: " + cadAtrasados,
+      "",
+      "POR UNIDADE:",
+      "- Nexus PF: " + pfCount,
+      "- Nexus Chapeco: " + chapeCount,
+      "- Nexus Online: " + onlineCount,
+      "",
+      "POR ORIGEM:",
+    ];
+    Object.entries(porOrigem).forEach(([k,v])=>lines.push("- "+k+": "+v));
+    lines.push("");
+    lines.push("LEADS RECENTES:");
+    [...leads].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,5).forEach(l=>{
+      const st = STAGES.find(s=>s.id===l.stage);
+      lines.push("- "+l.name+" ("+( st?st.label:l.stage)+", "+(l.unit||"sem unidade")+", "+(l.course||"sem curso")+")");
+    });
+    lines.push("");
+    lines.push("LEADS EM NEGOCIACAO:");
+    const negLeads = leads.filter(l=>l.stage==="negociacao");
+    if(negLeads.length>0) negLeads.forEach(l=>lines.push("- "+l.name+" | "+(l.course||"sem curso")+" | "+(l.unit||"sem unidade")));
+    else lines.push("Nenhum lead em negociacao");
+    lines.push("");
+    lines.push("PIPELINE: Novo Lead, Contato Feito, Informacoes Passadas, Qualificado, Nao Qualificado, Reuniao Agendada, Negociacao, Lista Fria, Matriculado, Perdido.");
+    lines.push("CADENCIA: 1-Primeiro Contato(dia0), 2-Retomar(dia0), 3-Retomar(dia1), 4-Outra forma(dia3), 5-Aula Exp(dia5), 6-Retirar lista(dia7), 7-Guardar(dia14).");
+    lines.push("");
+    lines.push("Responda sempre em portugues brasileiro. Use emojis. Seja objetivo e util. Forneca insights acionaveis.");
+    return lines.join("\n");
+  }  };
 
   const send = async () => {
     if (!input.trim() || loading) return;
