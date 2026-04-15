@@ -1895,16 +1895,13 @@ function AgenteIA({leads, mob}) {
     const fuAtrasados = leads.filter(l=>l.followUp?.date&&l.followUp.date<ts).length;
     const fuHoje = leads.filter(l=>l.followUp?.date===ts).length;
     const taxa = total>0?Math.round((matr/total)*100):0;
-
     const porUnidade = {
       pf: leads.filter(l=>l.unit==="pf").length,
       chape: leads.filter(l=>l.unit==="chape").length,
       online: leads.filter(l=>l.unit==="online").length,
     };
-
     const porOrigem = {};
     leads.forEach(l=>{ if(l.source) porOrigem[l.source]=(porOrigem[l.source]||0)+1; });
-
     const cadAtrasados = leads.filter(l=>{
       if(!["novo","contato","info","qualificado","naoqualif","reuniao"].includes(l.stage)||!l.cadenciaStep||l.cadenciaStep===0)return false;
       const cad=CADENCIA.find(c=>c.step===l.cadenciaStep);
@@ -1914,55 +1911,44 @@ function AgenteIA({leads, mob}) {
       const deadline=new Date(new Date(l.cadenciaStarted).getTime()+(deadlineDay*24*60*60*1000));
       return new Date()>deadline;
     }).length;
-
-    // Top 5 leads recentes
     const recentes = [...leads]
       .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
       .slice(0,5)
-      .map(l=>l.name+" ("+((STAGES.find(s=>s.id===l.stage)?.label)||l.stage)+", "+(l.unit||"sem unidade")+", "+(l.course||"sem curso")+")");
-
-    // Leads em negociação
+      .map(l=>l.name+" ("+(STAGES.find(s=>s.id===l.stage)?.label||l.stage)+", "+(l.unit||"sem unidade")+", "+(l.course||"sem curso")+")")
+      .join("
+");
     const negLeads = leads.filter(l=>l.stage==="negociacao")
-      .map(l=>l.name+" - "+(l.course||"sem curso")+" - "+(l.unit||"sem unidade"));
+      .map(l=>l.name+" - "+(l.course||"sem curso")+" - "+(l.unit||"sem unidade"))
+      .join("
+");
+    const origemStr = Object.entries(porOrigem).map(([k,v])=>"- "+k+": "+v).join("
+");
+    const hoje = new Date().toLocaleDateString("pt-BR");
 
-    return `Você é um assistente de vendas especializado da Nexus English Center, uma escola de inglês brasileira com unidades em Chapecó (chape), Passo Fundo (pf) e Online.
-
-DADOS ATUAIS DO CRM (${new Date().toLocaleDateString("pt-BR")}):
-
-RESUMO GERAL:
-- Total de leads: ${total}
-- Matriculados: ${matr} (taxa de conversão: ${taxa}%)
-- Perdidos: ${perdidos}
-- Em negociação: ${emNeg}
-- Reunião agendada: ${reuniao}
-- Novos leads: ${novos}
-
-FOLLOW-UPS:
-- Atrasados: ${fuAtrasados}
-- Para hoje: ${fuHoje}
-- Cadências atrasadas: ${cadAtrasados}
-
-POR UNIDADE:
-- Nexus PF: ${porUnidade.pf} leads
-- Nexus Chapecó: ${porUnidade.chape} leads
-- Nexus Online: ${porUnidade.online} leads
-
-POR ORIGEM:
-${Object.entries(porOrigem).map(([k,v])=>"- "+k+": "+v).join("\n")}
-
-LEADS RECENTES:
-${recentes.join("
-")}
-
-LEADS EM NEGOCIAÇÃO:
-${negLeads.length>0?negLeads.join("
-"):"Nenhum lead em negociação"}
-
-ETAPAS DO PIPELINE: Novo Lead → Contato Feito → Informações Passadas → Qualificado → Não Qualificado → Reunião Agendada → Negociação → Lista Fria → Matriculado → Perdido
-
-CADÊNCIA DE CONTATOS (7 etapas): 1°Primeiro Contato(dia 0), 2°Retomar mesmo dia, 3°Retomar dia 1, 4°Outra forma dia 3, 5°Aula Experimental dia 5, 6°Retirar da lista dia 7, 7°Guardar contato dia 14
-
-Responda sempre em português brasileiro de forma objetiva e útil. Use emojis quando apropriado. Forneça insights acionáveis baseados nos dados.`;
+    return "Voce e um assistente de vendas especializado da Nexus English Center, uma escola de ingles brasileira com unidades em Chapeco (chape), Passo Fundo (pf) e Online.\n\n"
+      + "DADOS ATUAIS DO CRM (" + hoje + "):\n\n"
+      + "RESUMO GERAL:\n"
+      + "- Total de leads: " + total + "\n"
+      + "- Matriculados: " + matr + " (taxa de conversao: " + taxa + "%)\n"
+      + "- Perdidos: " + perdidos + "\n"
+      + "- Em negociacao: " + emNeg + "\n"
+      + "- Reuniao agendada: " + reuniao + "\n"
+      + "- Novos leads: " + novos + "\n\n"
+      + "FOLLOW-UPS:\n"
+      + "- Atrasados: " + fuAtrasados + "\n"
+      + "- Para hoje: " + fuHoje + "\n"
+      + "- Cadencias atrasadas: " + cadAtrasados + "\n\n"
+      + "POR UNIDADE:\n"
+      + "- Nexus PF: " + porUnidade.pf + " leads\n"
+      + "- Nexus Chapeco: " + porUnidade.chape + " leads\n"
+      + "- Nexus Online: " + porUnidade.online + " leads\n\n"
+      + "POR ORIGEM:\n" + origemStr + "\n\n"
+      + "LEADS RECENTES:\n" + recentes + "\n\n"
+      + "LEADS EM NEGOCIACAO:\n" + (negLeads||"Nenhum lead em negociacao") + "\n\n"
+      + "ETAPAS DO PIPELINE: Novo Lead, Contato Feito, Informacoes Passadas, Qualificado, Nao Qualificado, Reuniao Agendada, Negociacao, Lista Fria, Matriculado, Perdido.\n\n"
+      + "CADENCIA DE CONTATOS (7 etapas): 1 Primeiro Contato dia 0, 2 Retomar mesmo dia, 3 Retomar dia 1, 4 Outra forma dia 3, 5 Aula Experimental dia 5, 6 Retirar da lista dia 7, 7 Guardar contato dia 14.\n\n"
+      + "Responda sempre em portugues brasileiro de forma objetiva e util. Use emojis quando apropriado. Forneca insights acionaveis baseados nos dados.";
+  }
   };
 
   const send = async () => {
