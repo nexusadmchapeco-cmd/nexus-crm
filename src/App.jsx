@@ -48,6 +48,7 @@ const NAV_ITEMS = [
   { id:"leads",      icon:"◎", label:"Leads"     },
   { id:"followups",  icon:"◷", label:"Follow-up" },
   { id:"relatorios", icon:"◈", label:"Relatórios"},
+  { id:"ia",         icon:"🤖", label:"Agente IA" },
 ];
 
 const HOURS = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00"];
@@ -1872,6 +1873,208 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   );
 }
 
+/* ─── AGENTE IA ──────────────────────────────────────────────────── */
+function AgenteIA({leads, mob}) {
+  const [msgs, setMsgs] = useState([
+    {role:"assistant", content:"Olá! Sou o agente de IA da Nexus. Tenho acesso a todos os dados do CRM e posso te ajudar com análises, resumos de leads, sugestões de próximos passos e muito mais. Como posso ajudar?"}
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[msgs]);
+
+  const buildContext = () => {
+    const ts = today();
+    const total = leads.length;
+    const matr = leads.filter(l=>l.stage==="matriculado").length;
+    const perdidos = leads.filter(l=>l.stage==="perdido").length;
+    const emNeg = leads.filter(l=>l.stage==="negociacao").length;
+    const novos = leads.filter(l=>l.stage==="novo").length;
+    const reuniao = leads.filter(l=>l.stage==="reuniao").length;
+    const fuAtrasados = leads.filter(l=>l.followUp?.date&&l.followUp.date<ts).length;
+    const fuHoje = leads.filter(l=>l.followUp?.date===ts).length;
+    const taxa = total>0?Math.round((matr/total)*100):0;
+
+    const porUnidade = {
+      pf: leads.filter(l=>l.unit==="pf").length,
+      chape: leads.filter(l=>l.unit==="chape").length,
+      online: leads.filter(l=>l.unit==="online").length,
+    };
+
+    const porOrigem = {};
+    leads.forEach(l=>{ if(l.source) porOrigem[l.source]=(porOrigem[l.source]||0)+1; });
+
+    const cadAtrasados = leads.filter(l=>{
+      if(!["novo","contato","info","qualificado","naoqualif","reuniao"].includes(l.stage)||!l.cadenciaStep||l.cadenciaStep===0)return false;
+      const cad=CADENCIA.find(c=>c.step===l.cadenciaStep);
+      const nextCad=CADENCIA.find(c=>c.step===l.cadenciaStep+1);
+      if(!cad||!l.cadenciaStarted)return false;
+      const deadlineDay=nextCad?nextCad.day:14;
+      const deadline=new Date(new Date(l.cadenciaStarted).getTime()+(deadlineDay*24*60*60*1000));
+      return new Date()>deadline;
+    }).length;
+
+    // Top 5 leads recentes
+    const recentes = [...leads]
+      .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
+      .slice(0,5)
+      .map(l=>`${l.name} (${STAGES.find(s=>s.id===l.stage)?.label||l.stage}, ${l.unit||"sem unidade"}, ${l.course||"sem curso"})`);
+
+    // Leads em negociação
+    const negLeads = leads.filter(l=>l.stage==="negociacao")
+      .map(l=>`${l.name} - ${l.course||"sem curso"} - ${l.unit||"sem unidade"}`);
+
+    return `Você é um assistente de vendas especializado da Nexus English Center, uma escola de inglês brasileira com unidades em Chapecó (chape), Passo Fundo (pf) e Online.
+
+DADOS ATUAIS DO CRM (${new Date().toLocaleDateString("pt-BR")}):
+
+RESUMO GERAL:
+- Total de leads: ${total}
+- Matriculados: ${matr} (taxa de conversão: ${taxa}%)
+- Perdidos: ${perdidos}
+- Em negociação: ${emNeg}
+- Reunião agendada: ${reuniao}
+- Novos leads: ${novos}
+
+FOLLOW-UPS:
+- Atrasados: ${fuAtrasados}
+- Para hoje: ${fuHoje}
+- Cadências atrasadas: ${cadAtrasados}
+
+POR UNIDADE:
+- Nexus PF: ${porUnidade.pf} leads
+- Nexus Chapecó: ${porUnidade.chape} leads
+- Nexus Online: ${porUnidade.online} leads
+
+POR ORIGEM:
+${Object.entries(porOrigem).map(([k,v])=>`- ${k}: ${v}`).join("
+")}
+
+LEADS RECENTES:
+${recentes.join("
+")}
+
+LEADS EM NEGOCIAÇÃO:
+${negLeads.length>0?negLeads.join("
+"):"Nenhum lead em negociação"}
+
+ETAPAS DO PIPELINE: Novo Lead → Contato Feito → Informações Passadas → Qualificado → Não Qualificado → Reunião Agendada → Negociação → Lista Fria → Matriculado → Perdido
+
+CADÊNCIA DE CONTATOS (7 etapas): 1°Primeiro Contato(dia 0), 2°Retomar mesmo dia, 3°Retomar dia 1, 4°Outra forma dia 3, 5°Aula Experimental dia 5, 6°Retirar da lista dia 7, 7°Guardar contato dia 14
+
+Responda sempre em português brasileiro de forma objetiva e útil. Use emojis quando apropriado. Forneça insights acionáveis baseados nos dados.`;
+  };
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput("");
+    setMsgs(p=>[...p, {role:"user", content:userMsg}]);
+    setLoading(true);
+
+    try {
+      const context = buildContext();
+      const history = msgs.slice(-10).map(m=>({role:m.role, content:m.content}));
+      
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: context,
+          messages: [...history, {role:"user", content:userMsg}]
+        })
+      });
+
+      const data = await response.json();
+      const reply = data.content?.[0]?.text || "Desculpe, não consegui processar sua pergunta.";
+      setMsgs(p=>[...p, {role:"assistant", content:reply}]);
+    } catch(e) {
+      setMsgs(p=>[...p, {role:"assistant", content:"❌ Erro ao conectar com a IA. Tente novamente."}]);
+    }
+    setLoading(false);
+  };
+
+  const suggestions = [
+    "Como está nossa performance este mês?",
+    "Quais leads estão com follow-up atrasado?",
+    "Quais origens convertem mais?",
+    "Resumo dos leads em negociação",
+    "Quais leads precisam de atenção urgente?",
+  ];
+
+  return (
+    <div style={{animation:"fadeUp .3s",display:"flex",flexDirection:"column",height:mob?"calc(100vh - 140px)":"calc(100vh - 120px)"}}>
+      <div style={{marginBottom:16,flexShrink:0}}>
+        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:700,letterSpacing:"-.5px"}}>🤖 Agente IA</h1>
+        <p style={{color:T.muted,fontSize:13,marginTop:4}}>Assistente inteligente com acesso aos dados do CRM</p>
+      </div>
+
+      {/* Chat area */}
+      <div style={{flex:1,overflowY:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:16,display:"flex",flexDirection:"column",gap:12,marginBottom:12}}>
+        {msgs.map((m,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+            {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:14,background:"#111",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,marginRight:8,alignSelf:"flex-start",marginTop:2}}>🤖</div>}
+            <div style={{
+              maxWidth:"80%",
+              background:m.role==="user"?T.accent:"#f8f8f8",
+              color:m.role==="user"?"white":T.text,
+              borderRadius:m.role==="user"?"16px 16px 2px 16px":"16px 16px 16px 2px",
+              padding:"10px 14px",
+              fontSize:14,
+              lineHeight:1.5,
+              whiteSpace:"pre-wrap",
+              wordBreak:"break-word"
+            }}>
+              {m.content}
+            </div>
+          </div>
+        ))}
+        {loading&&(
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:28,height:28,borderRadius:14,background:"#111",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🤖</div>
+            <div style={{background:"#f8f8f8",borderRadius:"16px 16px 16px 2px",padding:"10px 14px",display:"flex",gap:4,alignItems:"center"}}>
+              {[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:3,background:T.muted,animation:"fadeIn .6s infinite",animationDelay:`${i*0.2}s`}}/>)}
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef}/>
+      </div>
+
+      {/* Suggestions */}
+      {msgs.length<=1&&(
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12,flexShrink:0}}>
+          {suggestions.map((s,i)=>(
+            <button key={i} onClick={()=>setInput(s)} className="tap"
+              style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:"6px 12px",fontSize:12,color:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input */}
+      <div style={{display:"flex",gap:8,flexShrink:0}}>
+        <input
+          value={input}
+          onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()}
+          placeholder="Pergunte sobre seus leads, métricas, sugestões..."
+          style={{flex:1,background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+          onFocus={e=>e.target.style.borderColor=T.accent}
+          onBlur={e=>e.target.style.borderColor=T.border}
+        />
+        <button onClick={send} disabled={loading||!input.trim()} className="tap"
+          style={{background:T.accent,border:"none",borderRadius:12,padding:"12px 18px",fontSize:18,cursor:loading||!input.trim()?"not-allowed":"pointer",opacity:loading||!input.trim()?0.5:1,boxShadow:`0 4px 16px ${T.accent}44`}}>
+          ➤
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── SIDEBAR ────────────────────────────────────────────────────── */
 function Sidebar({active,onChange,fuCount,waUnread,cadLate,onLogout,userEmail}) {
   return (
@@ -2003,6 +2206,7 @@ export default function App() {
               {page==="leads"      &&<LeadsList leads={leads} onSelect={setSelected} onAdd={()=>setShowAdd(true)} mob={mob}/>}
               {page==="followups"  &&<FollowUps leads={leads} onSelect={setSelected} mob={mob}/>}
               {page==="relatorios" &&<Relatorios leads={leads} mob={mob}/>}
+              {page==="ia"          &&<AgenteIA leads={leads} mob={mob}/>}
             </>
           )}
         </main>
