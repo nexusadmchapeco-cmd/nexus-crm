@@ -1954,7 +1954,7 @@ function AgenteIA({leads, mob}) {
     lines.push("");
     lines.push("Responda sempre em portugues brasileiro. Use emojis. Seja objetivo e util. Forneca insights acionaveis.");
     return lines.join("\n");
-  }  };
+  };
 
   const send = async () => {
     if (!input.trim() || loading) return;
