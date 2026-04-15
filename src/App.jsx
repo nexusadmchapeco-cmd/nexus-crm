@@ -1919,11 +1919,11 @@ function AgenteIA({leads, mob}) {
     const recentes = [...leads]
       .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
       .slice(0,5)
-      .map(l=>`${l.name} (${STAGES.find(s=>s.id===l.stage)?.label||l.stage}, ${l.unit||"sem unidade"}, ${l.course||"sem curso"})`);
+      .map(l=>l.name+" ("+((STAGES.find(s=>s.id===l.stage)?.label)||l.stage)+", "+(l.unit||"sem unidade")+", "+(l.course||"sem curso")+")");
 
     // Leads em negociação
     const negLeads = leads.filter(l=>l.stage==="negociacao")
-      .map(l=>`${l.name} - ${l.course||"sem curso"} - ${l.unit||"sem unidade"}`);
+      .map(l=>l.name+" - "+(l.course||"sem curso")+" - "+(l.unit||"sem unidade"));
 
     return `Você é um assistente de vendas especializado da Nexus English Center, uma escola de inglês brasileira com unidades em Chapecó (chape), Passo Fundo (pf) e Online.
 
@@ -1948,8 +1948,7 @@ POR UNIDADE:
 - Nexus Online: ${porUnidade.online} leads
 
 POR ORIGEM:
-${Object.entries(porOrigem).map(([k,v])=>`- ${k}: ${v}`).join("
-")}
+${Object.entries(porOrigem).map(([k,v])=>"- "+k+": "+v).join("\n")}
 
 LEADS RECENTES:
 ${recentes.join("
