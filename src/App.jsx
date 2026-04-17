@@ -57,7 +57,7 @@ const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","A
 
 function today()   { return new Date().toISOString().split("T")[0]; }
 function uid()     { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
-function norm(s)   { return (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); }
+function norm(s)   { return (s||"").toLowerCase(); }
 function fmtDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -867,8 +867,8 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const dragging=useRef(null);
   const ts=today();
   const filteredLeads=leads.filter(l=>{
-    const s=norm(search).trim();
-    const matchSearch=!s||norm(l.name).includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
+    const s=(search||"").toLowerCase().trim();
+    const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
   });
@@ -913,7 +913,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
 
   if(mob) {
     const stage=STAGES.find(s=>s.id===activeStage);
-    const stLeads=leads.filter(l=>l.stage===activeStage);
+    const stLeads=filteredLeads.filter(l=>l.stage===activeStage);
     return (
       <div style={{animation:"fadeUp .3s"}}>
         {celebrating&&<CashCelebration onDone={()=>setCelebrating(false)}/>}
@@ -930,7 +930,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
           </select>
         </div>
         <div style={{display:"flex",gap:7,overflowX:"auto",paddingBottom:10,marginBottom:16,WebkitOverflowScrolling:"touch"}}>
-          {STAGES.map(s=>{const cnt=leads.filter(l=>l.stage===s.id).length,on=s.id===activeStage;return(
+          {STAGES.map(s=>{const cnt=filteredLeads.filter(l=>l.stage===s.id).length,on=s.id===activeStage;return(
             <button key={s.id} onClick={()=>setActiveStage(s.id)} className="tap"
               style={{flexShrink:0,background:on?s.hex:T.surface,color:on?"white":T.muted,border:`1.5px solid ${on?s.hex:T.border}`,borderRadius:20,padding:"5px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:4}}>
               {s.label}<span style={{background:on?"rgba(255,255,255,.25)":T.bg,borderRadius:10,padding:"1px 5px",fontSize:10}}>{cnt}</span>
