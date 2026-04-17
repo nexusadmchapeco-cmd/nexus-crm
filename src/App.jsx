@@ -7,7 +7,7 @@ const supabase = createClient(SUPA_URL, SUPA_KEY);
 const ZAPI_INSTANCE = "3F0F2B7CCECF710C472AB252550E5DC7";
 const ZAPI_TOKEN    = "BE18ADD41E82765B8E67964C";
 const ZAPI_CLIENT   = "Fddcba541ce4d42938750ece9472eaa38S";
-const LOGO = "/logo.svg";
+const LOGO = "/logo.png";
 
 const STAGES = [
   { id:"novo",        label:"Novo Lead",           emoji:"✦", hex:"#94a3b8", role:"sdr" },
