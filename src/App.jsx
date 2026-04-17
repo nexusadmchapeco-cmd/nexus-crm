@@ -866,8 +866,8 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const dragging=useRef(null);
   const ts=today();
   const filteredLeads=leads.filter(l=>{
-    const s=search.toLowerCase();
-    const matchSearch=!search||l.name.toLowerCase().includes(search.toLowerCase())||l.phone.replace(/\D/g,"").includes(search.replace(/\D/g,""))||l.phone.includes(search);
+    const s=search.toLowerCase().trim();
+    const matchSearch=!s||l.name.toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
   });
