@@ -479,7 +479,7 @@ function AgendaCloser({leads,mob}) {
   const [loading,setLoading]=useState(true);
   const [bookModal,setBookModal]=useState(null); // {date, time}
   const [blockMode,setBlockMode]=useState(false);
-  const [bookForm,setBookForm]=useState({lead_id:"",notes:""});
+  const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao"});
   const [saving,setSaving]=useState(false);
 
   const weekDates=getWeekDates(weekBase);
@@ -498,7 +498,7 @@ function AgendaCloser({leads,mob}) {
   };
 
   const isBlocked=(date,time)=>blocked.some(b=>b.date===date&&b.time===time);
-  const getSlot=(date,time)=>slots.find(s=>s.date===date&&s.time===time);
+  const getSlotsAt=(date,time)=>slots.filter(s=>s.date===date&&s.time===time);
 
   const toggleBlock=async(date,time)=>{
     if(isBlocked(date,time)){
@@ -513,9 +513,11 @@ function AgendaCloser({leads,mob}) {
     if(!bookForm.lead_id){alert("Selecione um lead.");return;}
     setSaving(true);
     const{date,time}=bookModal;
-    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado"});
+    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao"});
     if(!error){
-      await supabase.from("leads").update({stage:"reuniao"}).eq("id",bookForm.lead_id);
+      if(bookForm.tipo==="reuniao"){
+        await supabase.from("leads").update({stage:"reuniao"}).eq("id",bookForm.lead_id);
+      }
       await loadData();
       // Send WhatsApp notification to closer
       const lead=leads.find(l=>l.id===bookForm.lead_id);
@@ -567,6 +569,8 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
   const availLeads=leads.filter(l=>l.stage==="reuniao");
 
   const statusColor={agendado:T.gold,confirmado:T.accent,cancelado:"#dc2626"};
+  const tipoColor=(slot)=>slot?.tipo==="experimental"?"#10b981":T.accent;
+  const tipoLabel=(slot)=>slot?.tipo==="experimental"?"🧪 Aula Exp.":"📅 Reunião";
 
   return (
     <div style={{animation:"fadeUp .3s"}}>
@@ -592,9 +596,10 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {todaySlots.map(s=>{const lead=leads.find(l=>l.id===s.lead_id);return(
               <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
-                <span style={{fontWeight:700,color:T.accent}}>{s.time}–{addMinutes(s.time,30)}</span>
+                <span style={{fontWeight:700,color:s.tipo==="experimental"?"#10b981":T.accent}}>{s.tipo==="experimental"?"🧪":"📅"} {s.time}–{addMinutes(s.time,30)}</span>
                 <span style={{fontWeight:600}}>{lead?.name||"—"}</span>
                 <span style={{color:T.muted}}>{lead?.course||"—"}</span>
+                <Pill color={s.tipo==="experimental"?"#10b981":T.accent}>{s.tipo==="experimental"?"🎓 Experimental":"📅 Reunião"}</Pill>
                 <Pill color={statusColor[s.status]||T.muted}>{s.status}</Pill>
                 {s.status==="agendado"&&<>
                   <button onClick={()=>confirmarSlot(s.id)} className="tap" style={{background:T.accentLight,color:T.accent,border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:700,cursor:"pointer"}}>✓ Confirmar</button>
@@ -640,7 +645,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
                 {hour}
               </div>
               {workDates.map(date=>{
-                const slot=getSlot(date,hour);
+                const slotsAt=getSlotsAt(date,hour);const slot=slotsAt[0];
                 const blk=isBlocked(date,hour);
                 const lead=slot?leads.find(l=>l.id===slot.lead_id):null;
                 const isPast=date<ts||(date===ts&&hour<new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
@@ -654,13 +659,13 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
                     className={!slot&&!blk&&!isPast&&!blockMode?"slot-avail":""}
                     style={{
                       minHeight:44,padding:"4px 6px",borderRight:`1px solid ${T.border}`,
-                      background:blk?"#f0f0f0":slot?statusColor[slot.status]+"22":isPast?"#fafafa":"white",
+                      background:blk?"#f0f0f0":slot?(slot.tipo==="experimental"?"#10b98122":"#e85d2022"):isPast?"#fafafa":"white",
                       cursor:blockMode?"pointer":(!slot&&!blk&&!isPast?"pointer":"default"),
                       position:"relative",transition:"background .15s"
                     }}>
                     {blk&&<div style={{fontSize:11,color:"#94a3b8",fontWeight:600,padding:"4px 2px",textAlign:"center"}}>🔒</div>}
                     {slot&&(
-                      <div style={{fontSize:11,background:statusColor[slot.status]||T.accent,color:"white",borderRadius:6,padding:"4px 6px",lineHeight:1.3}}>
+                      <div style={{fontSize:11,background:slot.tipo==="experimental"?"#10b981":statusColor[slot.status]||T.accent,color:"white",borderRadius:6,padding:"4px 6px",lineHeight:1.3}}>
                         <div style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead?.name||"Lead"}</div>
                         <div style={{opacity:.85,fontSize:10}}>{hour}–{addMinutes(hour,30)}</div>
                         <div style={{display:"flex",gap:4,marginTop:4}}>
@@ -686,6 +691,28 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
           <div style={{display:"grid",gap:13}}>
             <Sel label="Lead *" value={bookForm.lead_id} onChange={e=>setBookForm(p=>({...p,lead_id:e.target.value}))}
               options={[{value:"",label:"Selecione o lead..."},...availLeads.map(l=>({value:l.id,label:`${l.name} — ${STAGES.find(s=>s.id===l.stage)?.label||""}`}))]}/>
+            <div>
+              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Tipo *</span>
+              <div style={{display:"flex",gap:8}}>
+                {[{id:"reuniao",label:"📅 Reunião",color:"#e85d20"},{id:"experimental",label:"🧪 Aula Experimental",color:"#10b981"}].map(t=>(
+                  <button key={t.id} type="button" onClick={()=>setBookForm(p=>({...p,tipo:t.id}))} className="tap"
+                    style={{flex:1,background:bookForm.tipo===t.id?t.color+"20":"transparent",border:`1.5px solid ${bookForm.tipo===t.id?t.color:T.border}`,borderRadius:10,padding:"10px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:bookForm.tipo===t.id?t.color:T.muted,transition:"all .15s"}}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Tipo de encontro</span>
+              <div style={{display:"flex",gap:8}}>
+                {[{id:"reuniao",label:"📅 Reunião de fechamento",color:T.accent},{id:"experimental",label:"🎓 Aula Experimental",color:"#10b981"}].map(t=>(
+                  <button key={t.id} type="button" onClick={()=>setBookForm(p=>({...p,tipo:t.id}))} className="tap"
+                    style={{flex:1,background:bookForm.tipo===t.id?t.color+"18":"transparent",border:`1.5px solid ${bookForm.tipo===t.id?t.color:T.border}`,borderRadius:10,padding:"10px 8px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:bookForm.tipo===t.id?t.color:T.muted,transition:"all .15s",textAlign:"center"}}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Inp label="Observações (opcional)" type="textarea" value={bookForm.notes} onChange={e=>setBookForm(p=>({...p,notes:e.target.value}))} placeholder="Interesse, objeções, pontos importantes..."/>
             <div style={{background:T.accentLight,borderRadius:10,padding:"10px 14px",fontSize:13,color:T.accent,fontWeight:600}}>
               📅 {new Date(bookModal.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})} · {bookModal.time} – {addMinutes(bookModal.time,30)} · 30 minutos
@@ -839,7 +866,8 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const dragging=useRef(null);
   const ts=today();
   const filteredLeads=leads.filter(l=>{
-    const matchSearch=!search||l.name.toLowerCase().includes(search.toLowerCase())||l.phone.includes(search);
+    const s=search.toLowerCase();
+    const matchSearch=!search||l.name.toLowerCase().includes(s)||l.phone.replace(/\D/g,"").includes(search.replace(/\D/g,""))||l.phone.includes(search);
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
   });
@@ -937,7 +965,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
       </div>
       {/* Filtros */}
       <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar por nome..." style={{background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"9px 14px",fontSize:14,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",width:220}}/>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Nome ou telefone..." style={{background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"9px 14px",fontSize:14,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",width:240}}/>
         <select value={filterUnit} onChange={e=>setFilterUnit(e.target.value)} style={{background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:filterUnit?T.text:T.muted,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>
           <option value="">Todas as unidades</option>
           {UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
@@ -1954,7 +1982,7 @@ function AgenteIA({leads, mob}) {
     lines.push("");
     lines.push("Responda sempre em portugues brasileiro. Use emojis. Seja objetivo e util. Forneca insights acionaveis.");
     return lines.join("\n");
-  };
+  }
 
   const send = async () => {
     if (!input.trim() || loading) return;
