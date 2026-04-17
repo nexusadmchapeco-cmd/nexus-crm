@@ -867,7 +867,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const ts=today();
   const filteredLeads=leads.filter(l=>{
     const s=search.toLowerCase();
-    const matchSearch=!search||l.name.toLowerCase().includes(s)||l.phone.replace(/\D/g,"").includes(search.replace(/\D/g,""))||l.phone.includes(search);
+    const matchSearch=!search||l.name.toLowerCase().includes(search.toLowerCase())||l.phone.replace(/\D/g,"").includes(search.replace(/\D/g,""))||l.phone.includes(search);
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
   });
@@ -2099,8 +2099,8 @@ function Sidebar({active,onChange,fuCount,waUnread,cadLate,onLogout,userEmail}) 
     <aside style={{width:220,background:"#111111",display:"flex",flexDirection:"column",height:"100vh",position:"sticky",top:0,flexShrink:0}}>
       <div style={{padding:"24px 20px 16px"}}>
         <div style={{marginBottom:28,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)"}}>
-          <div style={{background:"#ffffff",borderRadius:12,padding:"10px 14px",display:"inline-block"}}>
-            <img src={LOGO} alt="Nexus" style={{height:36,objectFit:"contain",display:"block"}}/>
+          <div style={{background:"transparent",display:"inline-block"}}>
+            <img src={LOGO} alt="Nexus" style={{height:48,objectFit:"contain",display:"block",filter:"drop-shadow(0 0 1px rgba(255,255,255,.1))"}}/>
           </div>
         </div>
         <nav style={{display:"flex",flexDirection:"column",gap:3}}>
@@ -2207,7 +2207,7 @@ export default function App() {
         <main style={{flex:1,padding:mob?"18px 16px 90px":"36px 40px",overflowY:"auto",minHeight:"100vh"}}>
           {mob&&(
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-              <div style={{background:"#ffffff",borderRadius:10,padding:"6px 10px",display:"inline-block"}}><img src={LOGO} alt="Nexus" style={{height:26,objectFit:"contain",display:"block"}}/></div>
+              <img src={LOGO} alt="Nexus" style={{height:32,objectFit:"contain",display:"block"}}/>
               <button onClick={logout} className="tap" style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",fontSize:12,color:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Sair</button>
             </div>
           )}
