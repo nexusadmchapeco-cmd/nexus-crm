@@ -57,6 +57,7 @@ const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","A
 
 function today()   { return new Date().toISOString().split("T")[0]; }
 function uid()     { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function norm(s)   { return (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); }
 function fmtDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -866,8 +867,8 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const dragging=useRef(null);
   const ts=today();
   const filteredLeads=leads.filter(l=>{
-    const s=search.toLowerCase().trim();
-    const matchSearch=!s||l.name.toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
+    const s=norm(search).trim();
+    const matchSearch=!s||norm(l.name).includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
   });
