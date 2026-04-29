@@ -41,11 +41,11 @@ const CADENCIA = [
 ];
 
 const CADENCIA_CLOSER = [
-  { step:1, label:"Retorno Reunião",     desc:"Retorno após reunião, tirar dúvidas iniciais",     hours:24,  color:"#6366f1" },
-  { step:2, label:"Tirar Dúvidas",       desc:"Acompanhamento e esclarecimento de dúvidas",        hours:48,  color:"#8b5cf6" },
-  { step:3, label:"Oferecer Promoção",   desc:"Apresentar oferta ou condição especial",            hours:72,  color:"#f59e0b" },
-  { step:4, label:"Retomar Mais à Frente",desc:"Informar que vai retomar contato futuramente",    hours:72,  color:"#94a3b8" },
-  { step:5, label:"Encerrar Atendimento",desc:"Encerrar ciclo de atendimento deste lead",         hours:48,  color:"#ef4444" },
+  { step:1, label:"Retorno Reunião",      desc:"Retorno após reunião, tirar dúvidas iniciais",   hours:24,  color:"#6366f1" },
+  { step:2, label:"Tirar Dúvidas",        desc:"Acompanhamento e esclarecimento de dúvidas",     hours:48,  color:"#8b5cf6" },
+  { step:3, label:"Aula Experimental",    desc:"Convidar para aula experimental gratuita",       hours:72,  color:"#10b981" },
+  { step:4, label:"Oferecer Promoção",    desc:"Apresentar oferta ou condição especial",         hours:72,  color:"#f59e0b" },
+  { step:5, label:"Encerrar Atendimento", desc:"Encerrar e mover para lista fria",               hours:48,  color:"#ef4444" },
 ];
 
 const NAV_ITEMS = [
@@ -1756,8 +1756,8 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
       {tab==="historico"&&(
         <div>
 
-          {/* Cadência de contatos */}
-          <div style={{marginBottom:4}}>
+          {/* Cadência de contatos - só para SDR */}
+          {!["negociacao","listafria","matriculado","perdido"].includes(lead.stage)&&<div style={{marginBottom:4}}>
             <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Cadência de contatos</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
               {CADENCIA.map(c=>{
@@ -1788,7 +1788,30 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
                 </button>
               );})}
             </div>
-          </div>
+          </div>}
+          {/* Cadência Closer */}
+          {["negociacao","listafria","matriculado","perdido"].includes(lead.stage)&&<div style={{marginBottom:4}}>
+            <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Cadência Closer</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+              {CADENCIA_CLOSER.map(c=>{
+                const n=c.step+"°";
+                return(
+                  <button key={c.step} className="tap" onClick={async()=>{
+                    setHist({type:c.step+"° "+c.label,note:""});
+                    const nextStep=CADENCIA_CLOSER.find(x=>x.step===c.step+1);
+                    if(nextStep){
+                      const nextDate=new Date(Date.now()+nextStep.hours*60*60*1000);
+                      setFu({date:nextDate.toISOString().split("T")[0],note:nextStep.step+"° "+nextStep.label,time:nextDate.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                    }
+                  }}
+                    style={{background:c.color+"15",border:`1.5px solid ${c.color}44`,borderRadius:9,padding:"8px 6px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+                    <div style={{fontSize:11,fontWeight:800,color:c.color}}>{n}</div>
+                    <div style={{fontSize:10,fontWeight:600,color:T.text,marginTop:2,lineHeight:1.3}}>{c.label}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>}
           <div style={{display:"flex",flexDirection:mob?"column":"row",gap:10,marginBottom:16,alignItems:mob?"stretch":"flex-end"}}>
             <div style={{minWidth:180}}>
               <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Etapa da Cadência</span>
