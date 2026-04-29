@@ -880,6 +880,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const [activeStage,setActiveStage]=useState("novo");
   const [search,setSearch]=useState("");
   const [filterUnit,setFilterUnit]=useState("");
+  const [matrFilter,setMatrFilter]=useState("mes"); // "mes" | "total"
   const dragging=useRef(null);
   const ts=today();
   const filteredLeads=leads.filter(l=>{
@@ -998,7 +999,14 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         </div>
         <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
           {sdrStages.map(stage=>{
-            const sl=filteredLeads.filter(l=>l.stage===stage.id),over=dragOver===stage.id;
+            const isMatr=stage.id==="matriculado";
+            const ts2=today();
+            const curMonth=new Date().getMonth(), curYear=new Date().getFullYear();
+            const slRaw=filteredLeads.filter(l=>l.stage===stage.id);
+            const sl=isMatr&&matrFilter==="mes"
+              ? slRaw.filter(l=>{ const d=new Date(l.createdAt); return d.getMonth()===curMonth&&d.getFullYear()===curYear; })
+              : slRaw;
+            const over=dragOver===stage.id;
             return (
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
@@ -1008,8 +1016,18 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
                   <span style={{fontSize:11,fontWeight:700}}>{stage.label}</span>
-                  <span style={{marginLeft:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:T.muted}}>{sl.length}</span>
+                  <span style={{marginLeft:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:T.muted}}>{sl.length}{isMatr&&matrFilter==="mes"&&<span style={{fontSize:9,color:T.muted}}> /mês</span>}</span>
                 </div>
+                {isMatr&&(
+                  <div style={{display:"flex",gap:4,marginBottom:10,background:T.bg,borderRadius:8,padding:3}}>
+                    {[["mes","Este mês"],["total","Total"]].map(([id,lbl])=>(
+                      <button key={id} onClick={()=>setMatrFilter(id)} className="tap"
+                        style={{flex:1,background:matrFilter===id?T.accent:"transparent",color:matrFilter===id?"white":T.muted,border:"none",borderRadius:6,padding:"4px 6px",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:40,maxHeight:340,overflowY:"auto",paddingRight:2}}>
                   {sl.map(lead=><LeadCard key={lead.id} lead={lead} stage={stage}/>)}
                 </div>
@@ -1026,7 +1044,14 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         </div>
         <div style={{display:"flex",gap:10,paddingBottom:8,alignItems:"flex-start"}}>
           {closerStages.map(stage=>{
-            const sl=filteredLeads.filter(l=>l.stage===stage.id),over=dragOver===stage.id;
+            const isMatr=stage.id==="matriculado";
+            const ts2=today();
+            const curMonth=new Date().getMonth(), curYear=new Date().getFullYear();
+            const slRaw=filteredLeads.filter(l=>l.stage===stage.id);
+            const sl=isMatr&&matrFilter==="mes"
+              ? slRaw.filter(l=>{ const d=new Date(l.createdAt); return d.getMonth()===curMonth&&d.getFullYear()===curYear; })
+              : slRaw;
+            const over=dragOver===stage.id;
             return (
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
@@ -1036,8 +1061,18 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
                   <span style={{fontSize:11,fontWeight:700}}>{stage.label}</span>
-                  <span style={{marginLeft:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:T.muted}}>{sl.length}</span>
+                  <span style={{marginLeft:"auto",background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:T.muted}}>{sl.length}{isMatr&&matrFilter==="mes"&&<span style={{fontSize:9,color:T.muted}}> /mês</span>}</span>
                 </div>
+                {isMatr&&(
+                  <div style={{display:"flex",gap:4,marginBottom:10,background:T.bg,borderRadius:8,padding:3}}>
+                    {[["mes","Este mês"],["total","Total"]].map(([id,lbl])=>(
+                      <button key={id} onClick={()=>setMatrFilter(id)} className="tap"
+                        style={{flex:1,background:matrFilter===id?T.accent:"transparent",color:matrFilter===id?"white":T.muted,border:"none",borderRadius:6,padding:"4px 6px",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:40,maxHeight:340,overflowY:"auto",paddingRight:2}}>
                   {sl.map(lead=><LeadCard key={lead.id} lead={lead} stage={stage}/>)}
                 </div>
