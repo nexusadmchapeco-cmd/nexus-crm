@@ -2113,19 +2113,25 @@ function AgenteIA({leads, mob}) {
       const context = buildContext();
       const history = msgs.slice(-10).map(m=>({role:m.role, content:m.content}));
       
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer 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"
+        },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "llama-3.3-70b-versatile",
           max_tokens: 1000,
-          system: context,
-          messages: [...history, {role:"user", content:userMsg}]
+          messages: [
+            {role:"system", content:context},
+            ...history,
+            {role:"user", content:userMsg}
+          ]
         })
       });
 
       const data = await response.json();
-      const reply = data.content?.[0]?.text || "Desculpe, não consegui processar sua pergunta.";
+      const reply = data.choices?.[0]?.message?.content || "Desculpe, não consegui processar sua pergunta.";
       setMsgs(p=>[...p, {role:"assistant", content:reply}]);
     } catch(e) {
       setMsgs(p=>[...p, {role:"assistant", content:"❌ Erro ao conectar com a IA. Tente novamente."}]);
