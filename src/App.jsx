@@ -40,6 +40,14 @@ const CADENCIA = [
   { step:7, label:"Guardar contato",    desc:"Guardar pra promoções futuras",         day:14, role:"sdr",    color:"#6b7280" },
 ];
 
+const CADENCIA_CLOSER = [
+  { step:1, label:"Retorno Reunião",     desc:"Retorno após reunião, tirar dúvidas iniciais",     hours:24,  color:"#6366f1" },
+  { step:2, label:"Tirar Dúvidas",       desc:"Acompanhamento e esclarecimento de dúvidas",        hours:48,  color:"#8b5cf6" },
+  { step:3, label:"Oferecer Promoção",   desc:"Apresentar oferta ou condição especial",            hours:72,  color:"#f59e0b" },
+  { step:4, label:"Retomar Mais à Frente",desc:"Informar que vai retomar contato futuramente",    hours:72,  color:"#94a3b8" },
+  { step:5, label:"Encerrar Atendimento",desc:"Encerrar ciclo de atendimento deste lead",         hours:48,  color:"#ef4444" },
+];
+
 const NAV_ITEMS = [
   { id:"pipeline",   icon:"◫", label:"Pipeline"  },
   { id:"agenda",     icon:"📅", label:"Agenda"    },
@@ -553,10 +561,18 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
 
   const confirmarSlot=async(id)=>{
     await supabase.from("agenda").update({status:"confirmado"}).eq("id",id);
-    // Move lead to negociacao automatically
     const slot=slots.find(s=>s.id===id);
     if(slot?.lead_id){
       await supabase.from("leads").update({stage:"negociacao"}).eq("id",slot.lead_id);
+      // Auto-schedule 1° Retorno Reunião 24h after confirmation
+      const next=new Date(Date.now()+24*60*60*1000);
+      const dateStr=next.toISOString().split("T")[0];
+      const timeStr=next.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+      await supabase.from("leads").update({
+        follow_up_date:dateStr,
+        follow_up_time:timeStr,
+        follow_up_note:"1° Retorno Reunião"
+      }).eq("id",slot.lead_id);
     }
     loadData();
   };
@@ -868,6 +884,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const ts=today();
   const filteredLeads=leads.filter(l=>{
     const s=(search||"").toLowerCase().trim();
+    if(s&&l===leads[0])console.log("filter running, s=",s,"name=",l.name,"match=",(l.name||"").toLowerCase().includes(s));
     const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
@@ -1646,7 +1663,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [concluiModal,setConcluiModal]=useState(false);
   const [concluiObs,setConcluiObs]=useState("");
   const [form,setForm]=useState({...lead, unit:lead.unit||''});
-  const [hist,setHist]=useState({type:"WhatsApp",note:""});
+  const [hist,setHist]=useState({type:"",note:""});
   const [fu,setFu]=useState(lead.followUp||{date:"",note:"",time:""});
   const [saving,setSaving]=useState(false);
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
@@ -1654,7 +1671,20 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
 
   const saveInfo=async()=>{setSaving(true);await supabase.from("leads").update({name:form.name,phone:form.phone,email:form.email,course:form.course,source:form.source,notes:form.notes,responsavel:form.responsavel||null,unit:form.unit||null}).eq("id",lead.id);onUpdate({...lead,...form,cadenciaStep:lead.cadenciaStep,cadenciaStarted:lead.cadenciaStarted});setEditing(false);setSaving(false);};
   const changeStage=async(id)=>{await supabase.from("leads").update({stage:id}).eq("id",lead.id);onUpdate({...lead,stage:id});};
-  const addHist=async()=>{if(!hist.note.trim())return;const entry={id:uid(),lead_id:lead.id,type:hist.type,note:hist.note,date:new Date().toISOString()};await supabase.from("lead_history").insert(entry);onUpdate({...lead,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});setHist({type:"WhatsApp",note:""});};
+  const addHist=async()=>{
+    if(!hist.note.trim())return;
+    const entry={id:uid(),lead_id:lead.id,type:hist.type,note:hist.note,date:new Date().toISOString()};
+    await supabase.from("lead_history").insert(entry);
+    const isCloserStep=CADENCIA_CLOSER.some(c=>c.step+"° "+c.label===hist.type);
+    const isSDRStep=CADENCIA.some(c=>c.step+"° "+c.label===hist.type);
+    if((isCloserStep||isSDRStep)&&fu.date){
+      await supabase.from("leads").update({follow_up_date:fu.date,follow_up_time:fu.time||null,follow_up_note:fu.note||null}).eq("id",lead.id);
+      onUpdate({...lead,followUp:{date:fu.date,time:fu.time||"",note:fu.note||""},history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});
+    } else {
+      onUpdate({...lead,history:[{id:entry.id,type:entry.type,note:entry.note,date:entry.date},...lead.history]});
+    }
+    setHist({type:"",note:""});
+  };
   const saveFu=async()=>{await supabase.from("leads").update({follow_up_date:fu.date||null,follow_up_note:fu.note||null,follow_up_time:fu.time||null}).eq("id",lead.id);onUpdate({...lead,followUp:fu.date?{...fu}:null});};
   const deleteLead=async()=>{if(!window.confirm("Excluir este lead?"))return;await supabase.from("leads").delete().eq("id",lead.id);onDelete(lead.id);};
 
@@ -1760,7 +1790,54 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
             </div>
           </div>
           <div style={{display:"flex",flexDirection:mob?"column":"row",gap:10,marginBottom:16,alignItems:mob?"stretch":"flex-end"}}>
-            <Sel label="Tipo" value={hist.type} onChange={e=>setHist(p=>({...p,type:e.target.value}))} options={CTYPES}/>
+            <div style={{minWidth:180}}>
+              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Etapa da Cadência</span>
+              {(()=>{
+                const isCloser=["negociacao","listafria","matriculado","perdido"].includes(lead.stage);
+                const cadList=isCloser?CADENCIA_CLOSER:CADENCIA;
+                const cadLabel=isCloser?"Cadência Closer":"Cadência SDR";
+                return(
+                  <select value={hist.type} onChange={async e=>{
+                    const val=e.target.value;
+                    setHist(p=>({...p,type:val}));
+                    // Auto-schedule next follow-up
+                    const SDR_HOURS=[4,20,48,48,48,168]; // hours to next step
+                    if(isCloser){
+                      const step=CADENCIA_CLOSER.find(c=>c.step+"° "+c.label===val);
+                      const nextStep=step?CADENCIA_CLOSER.find(c=>c.step===step.step+1):null;
+                      if(nextStep){
+                        const nextDate=new Date(Date.now()+nextStep.hours*60*60*1000);
+                        const dateStr=nextDate.toISOString().split("T")[0];
+                        const timeStr=nextDate.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+                        setFu({date:dateStr,note:nextStep.step+"° "+nextStep.label,time:timeStr});
+                      }
+                    } else {
+                      const step=CADENCIA.find(c=>c.step+"° "+c.label===val);
+                      const nextStep=step?CADENCIA.find(c=>c.step===step.step+1):null;
+                      if(step&&nextStep){
+                        const hrs=SDR_HOURS[step.step-1]||24;
+                        const nextDate=new Date(Date.now()+hrs*60*60*1000);
+                        const dateStr=nextDate.toISOString().split("T")[0];
+                        const timeStr=nextDate.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+                        setFu({date:dateStr,note:nextStep.step+"° "+nextStep.label,time:timeStr});
+                      }
+                    }
+                  }}
+                  style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>
+                  <option value="">Selecione...</option>
+                  <optgroup label={cadLabel}>
+                    {cadList.map(c=><option key={c.step} value={c.step+"° "+c.label}>{c.step}° {c.label}</option>)}
+                  </optgroup>
+                  <optgroup label="Outros">
+                    <option value="Ligação">📞 Ligação</option>
+                    <option value="Email">📧 Email</option>
+                    <option value="Reunião">🤝 Reunião</option>
+                    <option value="Anotação">📝 Anotação</option>
+                  </optgroup>
+                </select>
+                );
+              })()}
+            </div>
             <div style={{flex:1}}><Inp label="Nota" value={hist.note} onChange={e=>setHist(p=>({...p,note:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addHist()} placeholder="O que aconteceu?"/></div>
             <Btn onClick={addHist} full={mob}>+ Registrar</Btn>
           </div>
@@ -1768,7 +1845,24 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
             {lead.history.length===0?<div style={{textAlign:"center",color:T.muted,padding:32}}>Nenhum contato ainda.</div>
             :lead.history.map(h=>(
               <div key={h.id} style={{display:"flex",gap:12,background:"#f8f8f8",borderRadius:10,padding:"12px 14px"}}>
-                <span style={{fontSize:20}}>{{ WhatsApp:"💬",Ligação:"📞",Email:"📧",Reunião:"🤝",Anotação:"📝" }[h.type]||"📌"}</span>
+                <span style={{fontSize:20}}>{
+                  h.type==="Ligação"?"📞":
+                  h.type==="Email"?"📧":
+                  h.type==="Reunião"?"🤝":
+                  h.type==="Anotação"?"📝":
+                  h.type==="WhatsApp"?"💬":
+                  h.type?.includes("Retorno")?"🤝":
+                  h.type?.includes("Dúvidas")?"❓":
+                  h.type?.includes("Promoção")?"🎁":
+                  h.type?.includes("Frente")?"📅":
+                  h.type?.includes("Encerrar")?"🔚":
+                  h.type?.includes("Contato")?"1️⃣":
+                  h.type?.includes("Retomar")?"🔄":
+                  h.type?.includes("Outra")?"📲":
+                  h.type?.includes("Experimental")?"🧪":
+                  h.type?.includes("Retirar")?"⚠️":
+                  h.type?.includes("Guardar")?"💾":"📌"
+                }</span>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,flexWrap:"wrap",gap:4}}>
                     <span style={{fontWeight:700,fontSize:13,color:T.accent}}>{h.type}</span>
