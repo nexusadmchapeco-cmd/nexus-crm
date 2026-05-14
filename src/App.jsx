@@ -1004,7 +1004,13 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
             const curMonth=new Date().getMonth(), curYear=new Date().getFullYear();
             const slRaw=filteredLeads.filter(l=>l.stage===stage.id);
             const sl=isMatr&&matrFilter==="mes"
-              ? slRaw.filter(l=>{ const d=new Date(l.createdAt); return d.getMonth()===curMonth&&d.getFullYear()===curYear; })
+              ? slRaw.filter(l=>{
+                  if(l.matriculaMes) {
+                    const [y,m]=l.matriculaMes.split("-");
+                    return parseInt(m)-1===curMonth&&parseInt(y)===curYear;
+                  }
+                  const d=new Date(l.createdAt); return d.getMonth()===curMonth&&d.getFullYear()===curYear;
+                })
               : slRaw;
             const over=dragOver===stage.id;
             return (
@@ -1049,7 +1055,13 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
             const curMonth=new Date().getMonth(), curYear=new Date().getFullYear();
             const slRaw=filteredLeads.filter(l=>l.stage===stage.id);
             const sl=isMatr&&matrFilter==="mes"
-              ? slRaw.filter(l=>{ const d=new Date(l.createdAt); return d.getMonth()===curMonth&&d.getFullYear()===curYear; })
+              ? slRaw.filter(l=>{
+                  if(l.matriculaMes) {
+                    const [y,m]=l.matriculaMes.split("-");
+                    return parseInt(m)-1===curMonth&&parseInt(y)===curYear;
+                  }
+                  const d=new Date(l.createdAt); return d.getMonth()===curMonth&&d.getFullYear()===curYear;
+                })
               : slRaw;
             const over=dragOver===stage.id;
             return (
@@ -1697,14 +1709,14 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [nextCadModal,setNextCadModal]=useState(null); // {step, label, suggestedDate}
   const [concluiModal,setConcluiModal]=useState(false);
   const [concluiObs,setConcluiObs]=useState("");
-  const [form,setForm]=useState({...lead, unit:lead.unit||''});
+  const [form,setForm]=useState({...lead, unit:lead.unit||'', matriculaMes:lead.matriculaMes||''});
   const [hist,setHist]=useState({type:"",note:""});
   const [fu,setFu]=useState(lead.followUp||{date:"",note:"",time:""});
   const [saving,setSaving]=useState(false);
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const ts=today(),st=STAGES.find(s=>s.id===lead.stage);
 
-  const saveInfo=async()=>{setSaving(true);await supabase.from("leads").update({name:form.name,phone:form.phone,email:form.email,course:form.course,source:form.source,notes:form.notes,responsavel:form.responsavel||null,unit:form.unit||null}).eq("id",lead.id);onUpdate({...lead,...form,cadenciaStep:lead.cadenciaStep,cadenciaStarted:lead.cadenciaStarted});setEditing(false);setSaving(false);};
+  const saveInfo=async()=>{setSaving(true);await supabase.from("leads").update({name:form.name,phone:form.phone,email:form.email,course:form.course,source:form.source,notes:form.notes,responsavel:form.responsavel||null,unit:form.unit||null,matricula_mes:form.matriculaMes||null}).eq("id",lead.id);onUpdate({...lead,...form,cadenciaStep:lead.cadenciaStep,cadenciaStarted:lead.cadenciaStarted});setEditing(false);setSaving(false);};
   const changeStage=async(id)=>{await supabase.from("leads").update({stage:id}).eq("id",lead.id);onUpdate({...lead,stage:id});};
   const addHist=async()=>{
     if(!hist.note.trim())return;
@@ -1762,6 +1774,26 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
               ))}
             </div>
           </div>
+          {lead.stage==="matriculado"&&(
+            <div>
+              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Mês da Matrícula</span>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {Array.from({length:12},(_,i)=>{
+                  const now=new Date();
+                  const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+                  const val=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+                  const lbl=d.toLocaleDateString("pt-BR",{month:"short",year:"numeric"});
+                  const sel=form.matriculaMes===val;
+                  return(
+                    <button key={val} type="button" onClick={()=>f("matriculaMes",val)} className="tap"
+                      style={{background:sel?T.accent:"transparent",color:sel?"white":T.muted,border:`1.5px solid ${sel?T.accent:T.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                      {lbl}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <Inp label="Observações" type="textarea" value={form.notes||""} onChange={e=>f("notes",e.target.value)}/>
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <Btn variant="ghost" onClick={()=>setEditing(false)}>Cancelar</Btn>
@@ -1771,7 +1803,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
       ):(
         <div style={{display:"grid",gap:12}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {[["Nome",lead.name],["Telefone",lead.phone],["Email",lead.email||"—"],["Curso",lead.course||"—"],["Unidade",UNITS.find(u=>u.id===lead.unit)?.label||"—"],["Origem",lead.source||"—"],["Responsável",lead.responsavel||"—"]].map(([l,v])=>(
+            {[["Nome",lead.name],["Telefone",lead.phone],["Email",lead.email||"—"],["Curso",lead.course||"—"],["Unidade",UNITS.find(u=>u.id===lead.unit)?.label||"—"],["Origem",lead.source||"—"],["Responsável",lead.responsavel||"—"],lead.stage==="matriculado"?["Mês da Matrícula",lead.matriculaMes?new Date(lead.matriculaMes+"-15").toLocaleDateString("pt-BR",{month:"long",year:"numeric"}):"Não definido"]:null].filter(Boolean).map(([l,v])=>(
               <div key={l} style={{background:"#f8f8f8",borderRadius:10,padding:"11px 14px"}}>
                 <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:3}}>{l}</div>
                 <div style={{fontWeight:600,fontSize:14,wordBreak:"break-word"}}>{v}</div>
@@ -2326,7 +2358,7 @@ export default function App() {
       (waUnread||[]).forEach(m=>{if(m.lead_id)unreadMap[m.lead_id]=(unreadMap[m.lead_id]||0)+1;});
       setLeads((ld||[]).map(l=>({
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
-        stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,
+        stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,matriculaMes:l.matricula_mes||null,
         followUp:l.follow_up_date?{date:l.follow_up_date,note:l.follow_up_note||""}:null,
         history:(hd||[]).filter(h=>h.lead_id===l.id).map(h=>({id:h.id,type:h.type,note:h.note,date:h.date})),
         unreadCount:unreadMap[l.id]||0,
