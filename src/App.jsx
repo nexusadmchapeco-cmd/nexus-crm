@@ -100,6 +100,7 @@ const NAV_ITEMS = [
   { id:"dashboard",  icon:"⬡", label:"Dashboard" },
   { id:"leads",      icon:"◎", label:"Leads"     },
   { id:"followups",  icon:"◷", label:"Follow-up" },
+  { id:"metas",      icon:"🏆", label:"Metas"     },
   { id:"relatorios", icon:"◈", label:"Relatórios"},
   { id:"ia",         icon:"🤖", label:"Agente IA" },
 ];
@@ -2329,6 +2330,437 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   );
 }
 
+/* ─── PAINEL METAS ───────────────────────────────────────────────── */
+function PainelMetas({leads, mob}) {
+  const now = new Date();
+  const [selMonth, setSelMonth] = useState(now.getMonth());
+  const [selYear,  setSelYear]  = useState(now.getFullYear());
+  const [openUnit, setOpenUnit] = useState(null); // id da unidade expandida
+
+  // Meses disponíveis (últimos 6)
+  const monthOptions = Array.from({length:6},(_,i)=>{
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    return { month: d.getMonth(), year: d.getFullYear(), label: `${MONTHS[d.getMonth()].slice(0,3)} ${d.getFullYear()}` };
+  });
+
+  const diasNoMes = new Date(selYear, selMonth+1, 0).getDate();
+  const diaAtual  = (selMonth === now.getMonth() && selYear === now.getFullYear()) ? now.getDate() : diasNoMes;
+  const percMes   = Math.min((diaAtual / diasNoMes) * 100, 100);
+
+  // Leads matriculados no mês selecionado por unidade
+  const getMatrMes = (unitId) => leads.filter(l => {
+    if (l.stage !== "matriculado") return false;
+    if (l.unit !== unitId) return false;
+    if (l.matriculaMes) {
+      const [y,m] = l.matriculaMes.split("-");
+      return parseInt(m)-1 === selMonth && parseInt(y) === selYear;
+    }
+    const d = new Date(l.createdAt);
+    return d.getMonth() === selMonth && d.getFullYear() === selYear;
+  });
+
+  // Dados consolidados por unidade
+  const unitsData = UNITS.map(u => {
+    const matrLeads   = getMatrMes(u.id);
+    const m           = METAS[u.id];
+    const count       = matrLeads.length;
+    const mensLeads   = matrLeads.filter(l => l.tipoVenda === "mensalidade");
+    const avistaLeads = matrLeads.filter(l => l.tipoVenda === "avista");
+    const totalMensVal  = mensLeads.reduce((s,l) => s+(l.valorMensalidade||0), 0);
+    const totalAvistaVal= avistaLeads.reduce((s,l) => s+(l.valorAvista||0), 0);
+    const tier        = getTierForUnit(u.id, count);
+    const tierInfo    = COMISSAO_TIERS[tier];
+    const superValida = tier === "super" && isSuperMetaValid(u.id, mensLeads.length, totalAvistaVal);
+    const comissaoBase= totalMensVal * tierInfo.pct;
+    const premioPago  = totalAvistaVal >= m.avistaMin ? m.avistaPremio : 0;
+    const comissaoTotal = comissaoBase + premioPago;
+
+    // Projeção: ritmo atual → extrapolado pro fim do mês
+    const ritmo         = diaAtual > 0 ? count / diaAtual : 0;
+    const projecaoFim   = Math.round(ritmo * diasNoMes);
+    const projecaoTier  = getTierForUnit(u.id, projecaoFim);
+    const projecaoTierInfo = COMISSAO_TIERS[projecaoTier];
+    // Faltam X pra próximo tier
+    const nextTierCount = tier==="abaixo"?m.minima : tier==="minima"?m.ideal : tier==="ideal"?m.super : null;
+    const faltamNext    = nextTierCount ? Math.max(0, nextTierCount - count) : 0;
+    // Dias restantes no mês
+    const diasRestantes = diasNoMes - diaAtual;
+    // Ritmo necessário pra bater próximo tier
+    const ritmoNecessario = faltamNext > 0 && diasRestantes > 0 ? (faltamNext / diasRestantes).toFixed(1) : null;
+
+    // Histórico últimos 3 meses p/ sparkline
+    const historico = Array.from({length:3},(_,i)=>{
+      const d = new Date(selYear, selMonth-1-i, 1);
+      const cnt = leads.filter(l => {
+        if(l.stage!=="matriculado"||l.unit!==u.id) return false;
+        if(l.matriculaMes){const[y,mo]=l.matriculaMes.split("-");return parseInt(mo)-1===d.getMonth()&&parseInt(y)===d.getFullYear();}
+        const ld=new Date(l.createdAt);return ld.getMonth()===d.getMonth()&&ld.getFullYear()===d.getFullYear();
+      }).length;
+      return { label: MONTHS[d.getMonth()].slice(0,3), count: cnt };
+    }).reverse();
+
+    return { ...u, m, count, mensLeads, avistaLeads, totalMensVal, totalAvistaVal,
+      tier, tierInfo, superValida, comissaoBase, premioPago, comissaoTotal,
+      projecaoFim, projecaoTier, projecaoTierInfo, faltamNext, nextTierCount,
+      diasRestantes, ritmoNecessario, historico };
+  });
+
+  // Totais gerais
+  const totalMatr     = unitsData.reduce((s,u)=>s+u.count, 0);
+  const totalComissao = unitsData.reduce((s,u)=>s+u.comissaoTotal, 0);
+  const totalPremio   = unitsData.reduce((s,u)=>s+u.premioPago, 0);
+  const totalAvista   = unitsData.reduce((s,u)=>s+u.totalAvistaVal, 0);
+
+  const isCurMonth = selMonth===now.getMonth()&&selYear===now.getFullYear();
+
+  const tierBadge = (tier, superValida) => {
+    const map = {
+      abaixo: { label:"Abaixo da Mínima", bg:"#f1f5f9", color:"#64748b", icon:"—" },
+      minima: { label:"Meta Mínima ✅",    bg:"#fefce8", color:"#a16207", icon:"🟡" },
+      ideal:  { label:"Meta Ideal ⭐",     bg:"#eff6ff", color:"#1d4ed8", icon:"🔵" },
+      super:  { label: superValida ? "Super Meta 🚀" : "Super (inválida) ⚠", bg: superValida?"#f0fdf4":"#fffbeb", color: superValida?"#15803d":"#92400e", icon: superValida?"🟢":"🟠" },
+    };
+    return map[tier] || map.abaixo;
+  };
+
+  const UnitCard = ({u}) => {
+    const badge = tierBadge(u.tier, u.superValida);
+    const isOpen = openUnit === u.id;
+    const barW = Math.min((u.count / u.m.super)*100, 100);
+    const markerMin = (u.m.minima/u.m.super)*100;
+    const markerIdeal = (u.m.ideal/u.m.super)*100;
+    const barColor = u.tier==="super"?"#10b981":u.tier==="ideal"?"#6366f1":u.tier==="minima"?"#f59e0b":"#94a3b8";
+
+    return (
+      <div style={{background:"#fff",border:`1.5px solid ${u.tier==="abaixo"?T.border:barColor+"44"}`,borderRadius:16,overflow:"hidden",boxShadow:isOpen?"0 8px 32px rgba(0,0,0,.08)":"0 2px 8px rgba(0,0,0,.04)",transition:"all .2s"}}>
+        {/* Header clicável */}
+        <div onClick={()=>setOpenUnit(isOpen?null:u.id)} style={{padding:mob?"16px":"20px 24px",cursor:"pointer",borderLeft:`4px solid ${barColor}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:8}}>
+            <div>
+              <div style={{fontFamily:"'Syne',sans-serif",fontSize:mob?18:22,fontWeight:700,color:T.text}}>{u.label}</div>
+              <div style={{display:"inline-flex",alignItems:"center",gap:5,background:badge.bg,color:badge.color,borderRadius:20,padding:"3px 12px",fontSize:12,fontWeight:700,marginTop:4}}>
+                {badge.icon} {badge.label}
+              </div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:mob?36:44,fontWeight:800,color:barColor,lineHeight:1,letterSpacing:"-2px"}}>{u.count}</div>
+              <div style={{fontSize:12,color:T.muted,marginTop:2}}>de {u.m.super}+ (super)</div>
+            </div>
+          </div>
+
+          {/* Barra de progresso */}
+          <div style={{position:"relative",height:12,background:"#f1f5f9",borderRadius:6,marginBottom:8}}>
+            <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${barW}%`,background:`linear-gradient(90deg,${barColor}99,${barColor})`,borderRadius:6,transition:"width .5s ease"}}/>
+            {[{pos:markerMin,label:u.m.minima,color:"#f59e0b"},{pos:markerIdeal,label:u.m.ideal,color:"#6366f1"}].map((mk,i)=>(
+              <div key={i}>
+                <div style={{position:"absolute",left:`${mk.pos}%`,top:-3,width:2,height:18,background:mk.color,borderRadius:1,transform:"translateX(-50%)"}}/>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.muted}}>
+            <span style={{color:u.count>=u.m.minima?"#a16207":T.muted,fontWeight:u.count>=u.m.minima?700:400}}>Mín {u.m.minima}</span>
+            <span style={{color:u.count>=u.m.ideal?"#1d4ed8":T.muted,fontWeight:u.count>=u.m.ideal?700:400}}>Ideal {u.m.ideal}</span>
+            <span style={{color:u.count>=u.m.super?"#15803d":T.muted,fontWeight:u.count>=u.m.super?700:400}}>Super {u.m.super}+</span>
+          </div>
+
+          {/* Resumo rápido */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
+            {[
+              {label:"Comissão",value:fmtMoney(u.comissaoTotal),color:barColor},
+              {label:"À Vista",value:fmtMoney(u.totalAvistaVal),color:u.totalAvistaVal>=u.m.avistaMin?"#10b981":"#f59e0b"},
+              {label:"Projeção",value:`${u.projecaoFim} matr.`,color:COMISSAO_TIERS[u.projecaoTier]?.color||"#94a3b8"},
+            ].map(s=>(
+              <div key={s.label} style={{background:"#f8fafc",borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",marginBottom:2}}>{s.label}</div>
+                <div style={{fontSize:13,fontWeight:800,color:s.color}}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Detalhes expandidos */}
+        {isOpen && (
+          <div style={{borderTop:`1px solid ${T.border}`,padding:mob?"16px":"20px 24px",display:"grid",gap:20,background:"#fafafa"}}>
+
+            {/* Faixas de comissão */}
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:12}}>Faixas de Comissão</div>
+              <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:8}}>
+                {Object.entries(COMISSAO_TIERS).map(([key,t])=>{
+                  const isActive = u.tier===key;
+                  const cnt = key==="abaixo"?`< ${u.m.minima}`:key==="minima"?`${u.m.minima}–${u.m.ideal-1}`:key==="ideal"?`${u.m.ideal}–${u.m.super-1}`:`${u.m.super}+`;
+                  return (
+                    <div key={key} style={{background:isActive?t.color+"18":"#fff",border:`1.5px solid ${isActive?t.color:T.border}`,borderRadius:12,padding:"12px 10px",textAlign:"center",transition:"all .15s"}}>
+                      <div style={{fontSize:22,fontWeight:800,color:isActive?t.color:T.muted}}>{t.pct>0?`${(t.pct*100).toFixed(0)}%`:"—"}</div>
+                      <div style={{fontSize:11,fontWeight:700,color:isActive?t.color:T.muted,marginTop:2}}>{t.label}</div>
+                      <div style={{fontSize:10,color:T.muted,marginTop:2}}>{cnt} matr.</div>
+                      {isActive&&<div style={{fontSize:9,fontWeight:800,color:t.color,marginTop:4,textTransform:"uppercase",letterSpacing:".06em"}}>← ATUAL</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Comissão detalhada */}
+            <div style={{background:"#fff",border:`1px solid ${T.border}`,borderRadius:12,padding:"16px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:12}}>Cálculo da Comissão</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:14}}>
+                  <span style={{color:T.muted}}>Mensalidades ({u.mensLeads.length} × {(u.tierInfo.pct*100).toFixed(0)}%)</span>
+                  <span style={{fontWeight:700}}>{fmtMoney(u.comissaoBase)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:14}}>
+                  <span style={{color:T.muted}}>Prêmio à vista {u.totalAvistaVal>=u.m.avistaMin?"✅":"⏳"}</span>
+                  <span style={{fontWeight:700,color:u.premioPago>0?"#10b981":T.muted}}>{u.premioPago>0?`+ ${fmtMoney(u.premioPago)}`:"R$ 0"}</span>
+                </div>
+                <div style={{borderTop:`1px solid ${T.border}`,paddingTop:8,display:"flex",justifyContent:"space-between",fontSize:16}}>
+                  <span style={{fontWeight:700}}>Total estimado</span>
+                  <span style={{fontWeight:800,color:barColor,fontSize:20}}>{fmtMoney(u.comissaoTotal)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Meta à Vista */}
+            <div style={{background:"#fff",border:`1px solid ${T.border}`,borderRadius:12,padding:"16px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:12}}>Meta À Vista — Prêmio {fmtMoney(u.m.avistaPremio)}</div>
+              <div style={{position:"relative",height:10,background:"#f1f5f9",borderRadius:5,marginBottom:8}}>
+                <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${Math.min((u.totalAvistaVal/u.m.avistaMin)*100,100)}%`,background:u.totalAvistaVal>=u.m.avistaMin?"#10b981":"#f59e0b",borderRadius:5,transition:"width .5s"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}>
+                <div>
+                  <span style={{fontWeight:700,color:u.totalAvistaVal>=u.m.avistaMin?"#10b981":"#f59e0b"}}>{fmtMoney(u.totalAvistaVal)}</span>
+                  <span style={{color:T.muted}}> / {fmtMoney(u.m.avistaMin)}</span>
+                </div>
+                {u.totalAvistaVal>=u.m.avistaMin
+                  ? <span style={{fontWeight:700,color:"#10b981"}}>✅ Meta batida! +{fmtMoney(u.m.avistaPremio)}</span>
+                  : <span style={{color:T.muted}}>Faltam {fmtMoney(u.m.avistaMin-u.totalAvistaVal)}</span>
+                }
+              </div>
+              {/* Vendas à vista listadas */}
+              {u.avistaLeads.length>0&&(
+                <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:6}}>
+                  {u.avistaLeads.map(l=>(
+                    <div key={l.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,background:"#f0fdf4",borderRadius:8,padding:"6px 10px"}}>
+                      <span style={{fontWeight:600}}>{l.name}</span>
+                      <span style={{fontWeight:700,color:"#10b981"}}>{fmtMoney(l.valorAvista)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Super Meta validação */}
+            <div style={{background:u.superValida?"#f0fdf4":u.tier==="super"?"#fffbeb":"#fff",border:`1px solid ${u.superValida?"#86efac":u.tier==="super"?"#fde68a":T.border}`,borderRadius:12,padding:"16px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>Requisitos Super Meta</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {[
+                  { label:`Matrículas (${u.m.super}+)`, ok: u.count>=u.m.super, atual: u.count, meta: u.m.super },
+                  { label:`Mensalidades mín. (${u.m.superMensalidadeMin})`, ok: u.mensLeads.length>=u.m.superMensalidadeMin, atual: u.mensLeads.length, meta: u.m.superMensalidadeMin },
+                  { label:`Meta à vista (${fmtMoney(u.m.avistaMin)})`, ok: u.totalAvistaVal>=u.m.avistaMin, atual: fmtMoney(u.totalAvistaVal), meta: fmtMoney(u.m.avistaMin) },
+                ].map(req=>(
+                  <div key={req.label} style={{display:"flex",alignItems:"center",gap:10,background:req.ok?"#dcfce7":"#f8fafc",borderRadius:8,padding:"8px 12px"}}>
+                    <span style={{fontSize:16}}>{req.ok?"✅":"⏳"}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:600,color:req.ok?"#15803d":T.text}}>{req.label}</div>
+                      <div style={{fontSize:11,color:T.muted}}>{req.atual} / {req.meta}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Projeção */}
+            {isCurMonth&&(
+              <div style={{background:"#fff",border:`1px solid ${T.border}`,borderRadius:12,padding:"16px"}}>
+                <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:12}}>Projeção do Mês</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                  <div style={{background:"#f8fafc",borderRadius:10,padding:"12px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:T.muted,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>Ritmo atual</div>
+                    <div style={{fontSize:22,fontWeight:800,color:T.text}}>{(u.count/Math.max(diaAtual,1)*30).toFixed(1)}</div>
+                    <div style={{fontSize:11,color:T.muted}}>matr/mês (proj.)</div>
+                  </div>
+                  <div style={{background:COMISSAO_TIERS[u.projecaoTier]?.color+"18"||"#f8fafc",border:`1.5px solid ${COMISSAO_TIERS[u.projecaoTier]?.color+"44"||T.border}`,borderRadius:10,padding:"12px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:T.muted,fontWeight:600,textTransform:"uppercase",marginBottom:4}}>Projeção fim mês</div>
+                    <div style={{fontSize:22,fontWeight:800,color:COMISSAO_TIERS[u.projecaoTier]?.color||T.text}}>{u.projecaoFim}</div>
+                    <div style={{fontSize:11,color:COMISSAO_TIERS[u.projecaoTier]?.color||T.muted,fontWeight:600}}>{COMISSAO_TIERS[u.projecaoTier]?.label}</div>
+                  </div>
+                </div>
+                {u.faltamNext>0&&(
+                  <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"10px 14px",fontSize:13}}>
+                    <span style={{fontWeight:700,color:"#ea580c"}}>🎯 Faltam {u.faltamNext} matrículas</span>
+                    <span style={{color:T.muted}}> para {u.nextTierCount===u.m.minima?"Meta Mínima":u.nextTierCount===u.m.ideal?"Meta Ideal":"Super Meta"}</span>
+                    {u.ritmoNecessario&&<div style={{fontSize:11,color:T.muted,marginTop:3}}>Precisa de ~{u.ritmoNecessario} matr/dia nos próximos {u.diasRestantes} dias</div>}
+                  </div>
+                )}
+                {/* Sparkline histórico */}
+                {u.historico.length>0&&(
+                  <div style={{marginTop:12}}>
+                    <div style={{fontSize:11,color:T.muted,fontWeight:600,marginBottom:8}}>Últimos 3 meses</div>
+                    <div style={{display:"flex",gap:8,alignItems:"flex-end",height:60}}>
+                      {u.historico.map((h,i)=>{
+                        const maxH = Math.max(...u.historico.map(x=>x.count), u.m.super, 1);
+                        const hPct = (h.count/maxH)*100;
+                        const hTier = getTierForUnit(u.id, h.count);
+                        const hColor = COMISSAO_TIERS[hTier]?.color||"#94a3b8";
+                        return (
+                          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                            <div style={{fontSize:11,fontWeight:700,color:hColor}}>{h.count}</div>
+                            <div style={{width:"100%",background:hColor,borderRadius:"4px 4px 0 0",height:`${Math.max(hPct,4)}%`,transition:"height .4s"}}/>
+                            <div style={{fontSize:10,color:T.muted}}>{h.label}</div>
+                          </div>
+                        );
+                      })}
+                      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                        <div style={{fontSize:11,fontWeight:700,color:barColor}}>{u.count}</div>
+                        <div style={{width:"100%",background:barColor,borderRadius:"4px 4px 0 0",height:`${Math.max(barW,4)}%`,opacity:.7,position:"relative"}}>
+                          <div style={{position:"absolute",top:-1,left:0,right:0,height:2,background:barColor,borderRadius:1,animation:"pulseGold 1.5s infinite"}}/>
+                        </div>
+                        <div style={{fontSize:10,fontWeight:700,color:barColor}}>{MONTHS[selMonth].slice(0,3)}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Lista de matriculados do mês */}
+            {u.mensLeads.length+u.avistaLeads.length>0&&(
+              <div>
+                <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>Matrículas do Mês ({u.count})</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {[...u.mensLeads,...u.avistaLeads].map(l=>(
+                    <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px"}}>
+                      <div>
+                        <div style={{fontWeight:600,fontSize:13}}>{l.name}</div>
+                        <div style={{fontSize:11,color:T.muted}}>{l.course||"—"} · {l.responsavel||"—"}</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontWeight:700,fontSize:13,color:l.tipoVenda==="avista"?"#10b981":"#6366f1"}}>
+                          {l.tipoVenda==="avista"?"💵":"📅"} {fmtMoney(l.tipoVenda==="avista"?l.valorAvista:l.valorMensalidade)}
+                        </div>
+                        <div style={{fontSize:10,color:T.muted}}>{l.tipoVenda==="avista"?"À Vista":"Mensalidade"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{animation:"fadeUp .3s"}}>
+      {/* Header */}
+      <div style={{marginBottom:20}}>
+        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:34,fontWeight:700,letterSpacing:"-.5px"}}>🏆 Painel de Metas</h1>
+        <p style={{color:T.muted,fontSize:13,marginTop:4}}>Acompanhe metas, comissões e projeções por unidade</p>
+      </div>
+
+      {/* Seletor de mês */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:20,WebkitOverflowScrolling:"touch"}}>
+        {monthOptions.map(mo=>{
+          const on = mo.month===selMonth&&mo.year===selYear;
+          return (
+            <button key={`${mo.month}-${mo.year}`} onClick={()=>{setSelMonth(mo.month);setSelYear(mo.year);setOpenUnit(null);}} className="tap"
+              style={{flexShrink:0,background:on?T.accent:"transparent",color:on?"white":T.muted,border:`1.5px solid ${on?T.accent:T.border}`,borderRadius:20,padding:"6px 16px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
+              {mo.label}{on&&isCurMonth?" 🔴":""}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Progresso do mês */}
+      {isCurMonth&&(
+        <div style={{background:"#fff",border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?"14px 16px":"16px 22px",marginBottom:16,display:"flex",alignItems:"center",gap:16}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,color:T.muted,fontWeight:600,marginBottom:6}}>Progresso do mês — Dia {diaAtual} de {diasNoMes}</div>
+            <div style={{position:"relative",height:8,background:"#f1f5f9",borderRadius:4}}>
+              <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${percMes}%`,background:"linear-gradient(90deg,#6366f1,#8b5cf6)",borderRadius:4}}/>
+            </div>
+          </div>
+          <div style={{fontSize:22,fontWeight:800,color:"#6366f1",flexShrink:0}}>{Math.round(percMes)}%</div>
+        </div>
+      )}
+
+      {/* Cards de resumo geral */}
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+        {[
+          {label:"Total Matrículas",value:totalMatr,icon:"🎓",color:T.accent},
+          {label:"Comissão Total",  value:fmtMoney(totalComissao),icon:"💰",color:"#10b981"},
+          {label:"Prêmios À Vista", value:fmtMoney(totalPremio),icon:"🏅",color:"#f59e0b"},
+          {label:"Receita À Vista", value:fmtMoney(totalAvista),icon:"💵",color:"#6366f1"},
+        ].map(s=>(
+          <div key={s.label} style={{background:"#fff",border:`1px solid ${T.border}`,borderRadius:T.radius,padding:mob?"12px 14px":"16px 18px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <span style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em"}}>{s.label}</span>
+              <span style={{fontSize:16}}>{s.icon}</span>
+            </div>
+            <div style={{fontSize:mob?20:26,fontWeight:800,color:s.color,letterSpacing:"-1px"}}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cards por unidade */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {unitsData.map(u => <UnitCard key={u.id} u={u}/>)}
+      </div>
+
+      {/* Tabela comparativa */}
+      <div style={{background:"#fff",border:`1px solid ${T.border}`,borderRadius:T.radius,overflow:"hidden",marginTop:20}}>
+        <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`,fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:700}}>Comparativo por Unidade</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr style={{background:"#f8fafc",borderBottom:`1px solid ${T.border}`}}>
+                {["Unidade","Matrículas","Faixa","Comissão Base","Prêmio À Vista","Total Comissão","Projeção"].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {unitsData.map(u=>{
+                const badge = tierBadge(u.tier, u.superValida);
+                const projColor = COMISSAO_TIERS[u.projecaoTier]?.color||"#94a3b8";
+                return (
+                  <tr key={u.id} className="rw" onClick={()=>setOpenUnit(openUnit===u.id?null:u.id)} style={{borderBottom:`1px solid ${T.border}`,cursor:"pointer"}}>
+                    <td style={{padding:"12px 14px",fontWeight:700}}>{u.label}</td>
+                    <td style={{padding:"12px 14px"}}>
+                      <span style={{fontWeight:800,fontSize:16,color:COMISSAO_TIERS[u.tier]?.color||"#94a3b8"}}>{u.count}</span>
+                      <span style={{color:T.muted,fontSize:11}}> / {u.m.super}</span>
+                    </td>
+                    <td style={{padding:"12px 14px"}}>
+                      <span style={{background:badge.bg,color:badge.color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{badge.label}</span>
+                    </td>
+                    <td style={{padding:"12px 14px",fontWeight:600}}>{fmtMoney(u.comissaoBase)}</td>
+                    <td style={{padding:"12px 14px",fontWeight:600,color:u.premioPago>0?"#10b981":T.muted}}>{u.premioPago>0?`✅ ${fmtMoney(u.premioPago)}`:"—"}</td>
+                    <td style={{padding:"12px 14px",fontWeight:800,color:COMISSAO_TIERS[u.tier]?.color||T.text,fontSize:15}}>{fmtMoney(u.comissaoTotal)}</td>
+                    <td style={{padding:"12px 14px"}}>
+                      <span style={{color:projColor,fontWeight:700}}>{u.projecaoFim}</span>
+                      <span style={{fontSize:10,color:projColor,marginLeft:4}}>({COMISSAO_TIERS[u.projecaoTier]?.label})</span>
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr style={{background:"#f8fafc",borderTop:`2px solid ${T.border}`,fontWeight:700}}>
+                <td style={{padding:"12px 14px"}}>TOTAL</td>
+                <td style={{padding:"12px 14px",fontSize:16,fontWeight:800,color:T.accent}}>{totalMatr}</td>
+                <td style={{padding:"12px 14px"}}>—</td>
+                <td style={{padding:"12px 14px"}}>{fmtMoney(unitsData.reduce((s,u)=>s+u.comissaoBase,0))}</td>
+                <td style={{padding:"12px 14px",color:"#10b981"}}>{totalPremio>0?`✅ ${fmtMoney(totalPremio)}`:"—"}</td>
+                <td style={{padding:"12px 14px",fontSize:18,fontWeight:800,color:"#10b981"}}>{fmtMoney(totalComissao)}</td>
+                <td style={{padding:"12px 14px",fontWeight:700}}>{unitsData.reduce((s,u)=>s+u.projecaoFim,0)} matr.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── AGENTE IA ──────────────────────────────────────────────────── */
 function AgenteIA({leads, mob}) {
   const [msgs, setMsgs] = useState([{role:"assistant", content:"Olá! Sou o agente de IA da Nexus. Tenho acesso a todos os dados do CRM e posso te ajudar com análises, resumos de leads, sugestões de próximos passos e muito mais. Como posso ajudar?"}]);
@@ -2569,6 +3001,7 @@ export default function App() {
               {page==="dashboard"  &&<Dashboard leads={leads} mob={mob}/>}
               {page==="leads"      &&<LeadsList leads={leads} onSelect={setSelected} onAdd={()=>setShowAdd(true)} mob={mob}/>}
               {page==="followups"  &&<FollowUps leads={leads} onSelect={setSelected} mob={mob}/>}
+              {page==="metas"      &&<PainelMetas leads={leads} mob={mob}/>}
               {page==="relatorios" &&<Relatorios leads={leads} mob={mob}/>}
               {page==="ia"          &&<AgenteIA leads={leads} mob={mob}/>}
             </>
