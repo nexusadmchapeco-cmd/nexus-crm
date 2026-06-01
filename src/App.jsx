@@ -2923,7 +2923,7 @@ function PainelMetas({leads, mob}) {
                   ))}
                   <td style={{padding:"13px 16px",textAlign:"center"}}>
                     <span style={{fontWeight:800,fontSize:20,color:row.color}}>{row.tier==="minima"?"75%":row.tier==="ideal"?"85%":"95%"}</span>
-                    <div style={{fontSize:10,color:T.muted}}>da mensalidade</div>
+                    <div style={{fontSize:10,color:T.muted}}>do valor da matrícula</div>
                   </td>
                 </tr>
               ))}
