@@ -2835,8 +2835,17 @@ function PainelMetas({leads, mob}) {
     <div style={{animation:"fadeUp .3s"}}>
       {/* Header */}
       <div style={{marginBottom:20}}>
-        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:34,fontWeight:700,letterSpacing:"-.5px"}}>🏆 Painel de Metas</h1>
-        <p style={{color:T.muted,fontSize:13,marginTop:4}}>Acompanhe metas, comissões e projeções por unidade</p>
+        <div style={{display:"flex",alignItems:mob?"flex-start":"center",gap:16,flexDirection:mob?"column":"row",flexWrap:"wrap"}}>
+          <div>
+            <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:34,fontWeight:700,letterSpacing:"-.5px"}}>🏆 Painel de Metas</h1>
+            <p style={{color:T.muted,fontSize:13,marginTop:4}}>Acompanhe metas, comissões e projeções por unidade</p>
+          </div>
+          <div style={{background:"linear-gradient(135deg,#fefce8,#fff7ed)",border:"1.5px solid #fde68a",borderRadius:12,padding:"10px 16px",maxWidth:340}}>
+            <p style={{fontSize:13,fontWeight:600,color:"#92400e",fontStyle:"italic",margin:0,lineHeight:1.4}}>
+              💬 "Dinheiro não traz felicidade, mas comissão ajuda bastante."
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Seletor de mês */}
