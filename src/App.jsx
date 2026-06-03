@@ -52,21 +52,19 @@ const METAS = {
     label: "Nexus Online",
   },
 };
-// comissão por tier (% aplicado ao valor da mensalidade ou à vista)
+// comissão por tier — comissão é SEMPRE paga a partir de 1 matrícula
 const COMISSAO_TIERS = {
-  abaixo:  { label: "Abaixo da mínima", pct: 0,    color: "#94a3b8" },
-  minima:  { label: "Meta Mínima",      pct: 0.75, color: "#f59e0b" },
-  ideal:   { label: "Meta Ideal",       pct: 0.85, color: "#6366f1" },
-  super:   { label: "Super Meta",       pct: 0.95, color: "#10b981" },
+  minima: { label: "Comissão Base",  pct: 0.75, color: "#f59e0b" }, // 0–14
+  ideal:  { label: "Meta Ideal",     pct: 0.85, color: "#6366f1" }, // 15–19
+  super:  { label: "Super Meta",     pct: 0.95, color: "#10b981" }, // 20+
 };
 
 function getTierForUnit(unit, matrCount) {
   const m = METAS[unit];
-  if (!m) return "abaixo";
+  if (!m) return "minima";
   if (matrCount >= m.super) return "super";
   if (matrCount >= m.ideal) return "ideal";
-  if (matrCount >= m.minima) return "minima";
-  return "abaixo";
+  return "minima"; // 0–14 sempre recebe 75%
 }
 
 function isSuperMetaValid(unit, mensalidadeCount, avistaTotal) {
@@ -239,7 +237,7 @@ function MatriculaModal({ lead, onConfirm, onCancel, mob }) {
 
   const handleConfirm = () => {
     if (tipo === "mensalidade" && !valorMensalidade) {
-      alert("Informe o valor da mensalidade.");
+      alert("Informe o valor da matrícula.");
       return;
     }
     if (tipo === "avista" && !valorAvista) {
@@ -277,7 +275,7 @@ function MatriculaModal({ lead, onConfirm, onCancel, mob }) {
         {/* Valor mensalidade */}
         {tipo === "mensalidade" && (
           <div>
-            <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Valor da Mensalidade *</span>
+            <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Valor da Matrícula *</span>
             <div style={{position:"relative"}}>
               <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",fontSize:14,fontWeight:700,color:T.muted}}>R$</span>
               <input
@@ -392,13 +390,11 @@ function MiniMetas({ leads }) {
             {/* Tier badge */}
             <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}>
               <span style={{fontSize:9,fontWeight:700,color:barColor,background:barColor+"22",borderRadius:4,padding:"1px 6px"}}>
-                {tier === "super" && superOk ? "⚡ SUPER" : tier === "super" ? "🎯 IDEAL" : tier === "ideal" ? "🎯 IDEAL" : tier === "minima" ? "✓ MÍNIMA" : "— ABAIXO"}
+                {tier === "super" && superOk ? "⚡ SUPER" : tier === "super" ? "🎯 IDEAL" : tier === "ideal" ? "🎯 IDEAL" : "✓ BASE 75%"}
               </span>
-              {tier !== "abaixo" && (
-                <span style={{fontSize:9,color:"rgba(255,255,255,.3)"}}>
-                  com {Math.round(COMISSAO_TIERS[tier === "super" && !superOk ? "ideal" : tier].pct*100)}%
-                </span>
-              )}
+              <span style={{fontSize:9,color:"rgba(255,255,255,.3)"}}>
+                com {Math.round(COMISSAO_TIERS[tier === "super" && !superOk ? "ideal" : tier].pct*100)}%
+              </span>
               {avistaOk && <span style={{fontSize:9,fontWeight:700,color:"#10b981",marginLeft:"auto"}}>💵+R$150</span>}
             </div>
           </div>
@@ -1670,7 +1666,7 @@ function Relatorios({leads,mob}) {
                   <div style={{width:12,height:12,borderRadius:"50%",background:unit.border}}/>
                   <h3 style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:700}}>{unit.label}</h3>
                   <span style={{fontSize:13,fontWeight:700,color:barColor,background:barColor+"18",borderRadius:20,padding:"3px 12px"}}>
-                    {effectiveTier === "super" ? "⚡ SUPER META" : effectiveTier === "ideal" ? "🎯 META IDEAL" : effectiveTier === "minima" ? "✓ META MÍNIMA" : "— ABAIXO DA MÍNIMA"}
+                    {effectiveTier === "super" ? "⚡ SUPER META" : effectiveTier === "ideal" ? "🎯 META IDEAL" : effectiveTier === "minima" ? "✓ META MÍNIMA" : "✓ BASE 75%"}
                   </span>
                 </div>
                 <div style={{textAlign:"right"}}>
@@ -2352,9 +2348,9 @@ function SimuladorComissoes({mob}) {
   const barColor = tier==="super"?"#10b981":tier==="ideal"?"#6366f1":tier==="minima"?"#f59e0b":"#94a3b8";
   const barW = Math.min((totalMatrSim/m.super)*100,100);
 
-  const faixas = ["abaixo","minima","ideal","super"].map(t=>({
+  const faixas = ["minima","ideal","super"].map(t=>({
     t, info: COMISSAO_TIERS[t],
-    matrMin: t==="abaixo"?0:t==="minima"?m.minima:t==="ideal"?m.ideal:m.super,
+    matrMin: t==="minima"?0:t==="ideal"?m.ideal:m.super,
     comissao: totalMensVal * COMISSAO_TIERS[t].pct + (bateuAvista?m.avistaPremio:0),
   }));
 
@@ -2485,7 +2481,7 @@ function SimuladorComissoes({mob}) {
               return (
                 <div key={f.t} style={{background:isActive?f.info.color+"18":"#f8fafc",border:`1.5px solid ${isActive?f.info.color:T.border}`,borderRadius:12,padding:"12px",textAlign:"center",transition:"all .15s"}}>
                   <div style={{fontSize:11,fontWeight:700,color:isActive?f.info.color:T.muted,marginBottom:4}}>{f.info.label}</div>
-                  <div style={{fontSize:11,color:T.muted,marginBottom:6}}>{f.t==="abaixo"?"< "+m.minima:f.matrMin+"+"} matr.</div>
+                  <div style={{fontSize:11,color:T.muted,marginBottom:6}}>{f.t==="minima"?"0–"+(m.ideal-1):f.t==="ideal"?`${m.ideal}–${m.super-1}`:`${m.super}+`} matr.</div>
                   <div style={{fontSize:mob?16:20,fontWeight:800,color:isActive?f.info.color:T.muted}}>{fmtMoney(f.comissao)}</div>
                   {faltamFaixa>0&&<div style={{fontSize:10,color:T.muted,marginTop:4}}>+{faltamFaixa} matr.</div>}
                   {isActive&&<div style={{fontSize:9,fontWeight:800,color:f.info.color,marginTop:4,textTransform:"uppercase"}}>← você está aqui</div>}
@@ -2561,7 +2557,7 @@ function PainelMetas({leads, mob}) {
     const projecaoTier  = getTierForUnit(u.id, projecaoFim);
     const projecaoTierInfo = COMISSAO_TIERS[projecaoTier];
     // Faltam X pra próximo tier
-    const nextTierCount = tier==="abaixo"?m.minima : tier==="minima"?m.ideal : tier==="ideal"?m.super : null;
+    const nextTierCount = tier==="minima"?m.ideal : tier==="ideal"?m.super : null;
     const faltamNext    = nextTierCount ? Math.max(0, nextTierCount - count) : 0;
     // Dias restantes no mês
     const diasRestantes = diasNoMes - diaAtual;
@@ -2595,12 +2591,11 @@ function PainelMetas({leads, mob}) {
 
   const tierBadge = (tier, superValida) => {
     const map = {
-      abaixo: { label:"Abaixo da Mínima", bg:"#f1f5f9", color:"#64748b", icon:"—" },
-      minima: { label:"Meta Mínima ✅",    bg:"#fefce8", color:"#a16207", icon:"🟡" },
-      ideal:  { label:"Meta Ideal ⭐",     bg:"#eff6ff", color:"#1d4ed8", icon:"🔵" },
+      minima: { label:"Comissão Base 75%", bg:"#fefce8", color:"#a16207", icon:"🟡" },
+      ideal:  { label:"Meta Ideal ⭐",      bg:"#eff6ff", color:"#1d4ed8", icon:"🔵" },
       super:  { label: superValida ? "Super Meta 🚀" : "Super (inválida) ⚠", bg: superValida?"#f0fdf4":"#fffbeb", color: superValida?"#15803d":"#92400e", icon: superValida?"🟢":"🟠" },
     };
-    return map[tier] || map.abaixo;
+    return map[tier] || map.minima;
   };
 
   const UnitCard = ({u}) => {
@@ -2612,7 +2607,7 @@ function PainelMetas({leads, mob}) {
     const barColor = u.tier==="super"?"#10b981":u.tier==="ideal"?"#6366f1":u.tier==="minima"?"#f59e0b":"#94a3b8";
 
     return (
-      <div style={{background:"#fff",border:`1.5px solid ${u.tier==="abaixo"?T.border:barColor+"44"}`,borderRadius:16,overflow:"hidden",boxShadow:isOpen?"0 8px 32px rgba(0,0,0,.08)":"0 2px 8px rgba(0,0,0,.04)",transition:"all .2s"}}>
+      <div style={{background:"#fff",border:`1.5px solid ${barColor}44`,borderRadius:16,overflow:"hidden",boxShadow:isOpen?"0 8px 32px rgba(0,0,0,.08)":"0 2px 8px rgba(0,0,0,.04)",transition:"all .2s"}}>
         {/* Header clicável */}
         <div onClick={()=>setOpenUnit(isOpen?null:u.id)} style={{padding:mob?"16px":"20px 24px",cursor:"pointer",borderLeft:`4px solid ${barColor}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:8}}>
@@ -2668,7 +2663,7 @@ function PainelMetas({leads, mob}) {
               <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:8}}>
                 {Object.entries(COMISSAO_TIERS).map(([key,t])=>{
                   const isActive = u.tier===key;
-                  const cnt = key==="abaixo"?`< ${u.m.minima}`:key==="minima"?`${u.m.minima}–${u.m.ideal-1}`:key==="ideal"?`${u.m.ideal}–${u.m.super-1}`:`${u.m.super}+`;
+                  const cnt = key==="minima"?`0–${u.m.ideal-1}`:key==="ideal"?`${u.m.ideal}–${u.m.super-1}`:`${u.m.super}+`;
                   return (
                     <div key={key} style={{background:isActive?t.color+"18":"#fff",border:`1.5px solid ${isActive?t.color:T.border}`,borderRadius:12,padding:"12px 10px",textAlign:"center",transition:"all .15s"}}>
                       <div style={{fontSize:22,fontWeight:800,color:isActive?t.color:T.muted}}>{t.pct>0?`${(t.pct*100).toFixed(0)}%`:"—"}</div>
@@ -2915,18 +2910,19 @@ function PainelMetas({leads, mob}) {
             </thead>
             <tbody>
               {[
-                {tier:"minima", label:"🟡 Meta Mínima", color:"#a16207", bg:"#fefce8"},
-                {tier:"ideal",  label:"🔵 Meta Ideal",  color:"#1d4ed8", bg:"#eff6ff"},
-                {tier:"super",  label:"🟢 Super Meta",  color:"#15803d", bg:"#f0fdf4"},
+                {tier:"minima", label:"🟡 Comissão Base", color:"#a16207", bg:"#fefce8", range:"0–14"},
+                {tier:"ideal",  label:"🔵 Meta Ideal",    color:"#1d4ed8", bg:"#eff6ff", range:"15–19"},
+                {tier:"super",  label:"🟢 Super Meta",    color:"#15803d", bg:"#f0fdf4", range:"20+"},
               ].map(row=>(
                 <tr key={row.tier} style={{borderBottom:`1px solid ${T.border}`,background:row.bg+"80"}}>
                   <td style={{padding:"13px 16px"}}>
                     <div style={{fontWeight:700,color:row.color,fontSize:14}}>{row.label}</div>
+                    <div style={{fontSize:11,color:T.muted,marginTop:2}}>{row.range} matrículas</div>
                     {row.tier==="super"&&<div style={{fontSize:11,color:T.muted,marginTop:2}}>+ requisitos especiais</div>}
                   </td>
                   {UNITS.map(u=>(
                     <td key={u.id} style={{padding:"13px 16px",textAlign:"center"}}>
-                      <span style={{fontWeight:800,fontSize:18,color:row.color}}>{METAS[u.id][row.tier]}+</span>
+                      <span style={{fontWeight:800,fontSize:18,color:row.color}}>{row.tier==="minima"?"0–"+(u.id==="online"?METAS[u.id].ideal-1:METAS[u.id].ideal-1):row.tier==="ideal"?`${METAS[u.id].ideal}–${METAS[u.id].super-1}`:`${METAS[u.id].super}+`}</span>
                       <div style={{fontSize:10,color:T.muted}}>matrículas</div>
                     </td>
                   ))}
