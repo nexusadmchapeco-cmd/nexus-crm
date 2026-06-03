@@ -978,18 +978,16 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   const closerStages=STAGES.filter(s=>s.role==="closer");
 
   const handleMatriculaConfirm = async (leadId, data) => {
-    // Save matricula info + move stage
+    // Salva valor da matrícula no campo valor_mensalidade (campo existente no banco)
     await supabase.from("leads").update({
       stage: "matriculado",
-      tipo_venda: data.tipo,
-      valor_matricula: data.tipo === "mensalidade" ? data.valorMatricula : null,
-      valor_avista_curso: data.tipo === "avista" ? data.valorAvistaCurso : null,
+      valor_mensalidade: data.valorMatricula || null,
     }).eq("id", leadId);
 
     if (data.obs) {
       await supabase.from("lead_history").insert({
         id: uid(), lead_id: leadId, type: "Anotação",
-        note: `💰 Matrícula registrada — ${data.tipo === "avista" ? `À Vista: ${fmtMoney(data.valorAvistaCurso)}` : `Mensalidade: ${fmtMoney(data.valorMatricula)}`}${data.obs ? `. ${data.obs}` : ""}`,
+        note: `💰 Matrícula registrada — Valor: ${fmtMoney(data.valorMatricula)}${data.obs ? `. ${data.obs}` : ""}`,
         date: new Date().toISOString()
       });
     }
@@ -1964,11 +1962,9 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
 
   const handleEditMatricula = async (data) => {
     await supabase.from("leads").update({
-      tipo_venda: data.tipo,
-      valor_matricula: data.tipo === "mensalidade" ? data.valorMatricula : null,
-      valor_avista_curso: data.tipo === "avista" ? data.valorAvistaCurso : null,
+      valor_mensalidade: data.valorMatricula || null,
     }).eq("id", lead.id);
-    onUpdate({...lead, tipoVenda: data.tipo, valorMatricula: data.tipo==="mensalidade"?data.valorMatricula:0, valorAvistaCurso: data.tipo==="avista"?data.valorAvistaCurso:0});
+    onUpdate({...lead, valorMatricula: data.valorMatricula});
     setEditMatriculaModal(false);
   };
 
@@ -3134,7 +3130,7 @@ export default function App() {
     if(!session)return;
     setDbLoading(true);
     (async()=>{
-      const{data:ld}=await supabase.from("leads").select("*,updated_at").order("created_at",{ascending:false});
+      const{data:ld}=await supabase.from("leads").select("*").order("created_at",{ascending:false});
       const{data:hd}=await supabase.from("lead_history").select("*").order("date",{ascending:false});
       const{data:waUnread}=await supabase.from("whatsapp_messages").select("lead_id").eq("direction","in").eq("read",false);
       const unreadMap={};
@@ -3143,10 +3139,8 @@ export default function App() {
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
         stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,
         cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,matriculaMes:l.matricula_mes||null,updatedAt:l.updated_at||l.created_at,
-        // Matrícula fields
-        tipoVenda:l.tipo_venda||null,
-        valorMatricula:l.valor_matricula||0,
-        valorAvistaCurso:l.valor_avista_curso||0,
+        // Matrícula fields — valor_matricula é o campo novo, valor_mensalidade é o legado
+        valorMatricula:l.valor_matricula||l.valor_mensalidade||null,
         followUp:l.follow_up_date?{date:l.follow_up_date,note:l.follow_up_note||"",time:l.follow_up_time||""}:null,
         history:(hd||[]).filter(h=>h.lead_id===l.id).map(h=>({id:h.id,type:h.type,note:h.note,date:h.date})),
         unreadCount:unreadMap[l.id]||0,
@@ -3163,9 +3157,9 @@ export default function App() {
   const moveLead=async(lid,sid,extraData=null)=>{
     const updates={stage:sid};
     if(extraData){
-      if(extraData.tipoVenda) updates.tipo_venda=extraData.tipoVenda;
-      if(extraData.valorMatricula!=null) updates.valor_matricula=extraData.valorMatricula;
-      if(extraData.valorAvistaCurso!=null) updates.valor_avista_curso=extraData.valorAvistaCurso;
+
+      if(extraData.valorMatricula!=null) updates.valor_mensalidade=extraData.valorMatricula;
+
     }
     await supabase.from("leads").update(updates).eq("id",lid);
     setLeads(p=>p.map(l=>l.id===lid?{...l,stage:sid,...(extraData||{})}:l));
