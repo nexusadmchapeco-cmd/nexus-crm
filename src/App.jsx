@@ -230,99 +230,40 @@ function Modal({title,subtitle,onClose,children,width=520,mob}) {
 
 /* ─── MATRICULA MODAL ────────────────────────────────────────────── */
 function MatriculaModal({ lead, onConfirm, onCancel, mob }) {
-  const [tipo, setTipo] = useState("mensalidade"); // "mensalidade" | "avista"
-  const [valorMensalidade, setValorMensalidade] = useState("");
-  const [valorAvista, setValorAvista] = useState("");
+  const [valorMatricula, setValorMatricula] = useState("");
   const [obs, setObs] = useState("");
 
   const handleConfirm = () => {
-    if (tipo === "mensalidade" && !valorMensalidade) {
-      alert("Informe o valor da matrícula.");
-      return;
-    }
-    if (tipo === "avista" && !valorAvista) {
-      alert("Informe o valor total do curso.");
-      return;
-    }
+    if (!valorMatricula) { alert("Informe o valor da matrícula."); return; }
     onConfirm({
-      tipo,
-      valorMensalidade: tipo === "mensalidade" ? parseFloat(valorMensalidade) || 0 : 0,
-      valorAvista: tipo === "avista" ? parseFloat(valorAvista) || 0 : 0,
+      valorMatricula: parseFloat(String(valorMatricula).replace(",",".")) || 0,
       obs,
     });
   };
 
   return (
-    <Modal title="🏆 Registrar Matrícula" subtitle={`${lead?.name || "Lead"} — ${lead?.course || "—"}`} onClose={onCancel} mob={mob} width={480}>
+    <Modal title="🏆 Registrar Matrícula" subtitle={`${lead?.name || "Lead"} — ${lead?.course || "—"}`} onClose={onCancel} mob={mob} width={420}>
       <div style={{display:"grid",gap:16}}>
-        {/* Tipo de venda */}
-        <div>
-          <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Tipo de Venda *</span>
-          <div style={{display:"flex",gap:8}}>
-            {[
-              {id:"mensalidade", icon:"📅", label:"Mensalidade"},
-              {id:"avista",      icon:"💵", label:"À Vista"},
-            ].map(t=>(
-              <button key={t.id} type="button" onClick={()=>setTipo(t.id)} className="tap"
-                style={{flex:1,background:tipo===t.id?"#e85d2018":"transparent",border:`1.5px solid ${tipo===t.id?T.accent:T.border}`,borderRadius:11,padding:"14px 10px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:tipo===t.id?T.accent:T.muted,transition:"all .15s",textAlign:"center"}}>
-                <div style={{fontSize:24,marginBottom:4}}>{t.icon}</div>
-                {t.label}
-              </button>
-            ))}
-          </div>
+        <div style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"1.5px solid #86efac",borderRadius:12,padding:"16px 18px",textAlign:"center"}}>
+          <div style={{fontSize:40,marginBottom:4}}>🎉</div>
+          <div style={{fontSize:14,fontWeight:700,color:"#15803d"}}>Nova matrícula! Informe o valor para calcular a comissão.</div>
         </div>
-
-        {/* Valor mensalidade */}
-        {tipo === "mensalidade" && (
-          <div>
-            <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Valor da Matrícula *</span>
-            <div style={{position:"relative"}}>
-              <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",fontSize:14,fontWeight:700,color:T.muted}}>R$</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={valorMensalidade}
-                onChange={e=>setValorMensalidade(e.target.value)}
-                placeholder="0,00"
-                style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 13px 11px 36px",fontSize:16,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
-                onFocus={e=>e.target.style.borderColor=T.accent}
-                onBlur={e=>e.target.style.borderColor=T.border}
-                autoFocus
-              />
-            </div>
+        <div>
+          <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Valor da Matrícula *</span>
+          <div style={{position:"relative"}}>
+            <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",fontSize:15,fontWeight:700,color:T.muted}}>R$</span>
+            <input type="number" min="0" step="0.01" value={valorMatricula} onChange={e=>setValorMatricula(e.target.value)}
+              placeholder="0,00" autoFocus
+              style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"13px 13px 13px 38px",fontSize:18,fontWeight:700,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+              onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
           </div>
-        )}
-
-        {/* Valor à vista */}
-        {tipo === "avista" && (
-          <div style={{display:"grid",gap:12}}>
-            <div>
-              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Valor Total do Curso (à vista) *</span>
-              <div style={{position:"relative"}}>
-                <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",fontSize:14,fontWeight:700,color:T.muted}}>R$</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={valorAvista}
-                  onChange={e=>setValorAvista(e.target.value)}
-                  placeholder="0,00"
-                  style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 13px 11px 36px",fontSize:16,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
-                  onFocus={e=>e.target.style.borderColor=T.accent}
-                  onBlur={e=>e.target.style.borderColor=T.border}
-                  autoFocus
-                />
-              </div>
+          {valorMatricula && (
+            <div style={{marginTop:8,fontSize:12,color:T.muted,background:"#f8f8f8",borderRadius:8,padding:"6px 12px"}}>
+              Comissão estimada (75%): <strong style={{color:T.accent}}>{fmtMoney((parseFloat(String(valorMatricula).replace(",","."))||0)*0.75)}</strong>
             </div>
-            <div style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#15803d",fontWeight:600}}>
-              💵 Venda à vista — conta para a meta de premiação!
-            </div>
-          </div>
-        )}
-
-        <Inp label="Observações (opcional)" type="textarea" value={obs} onChange={e=>setObs(e.target.value)} placeholder="Ex: Fechou Nexus Class, pagamento via PIX..."/>
-
+          )}
+        </div>
+        <Inp label="Observações (opcional)" type="textarea" value={obs} onChange={e=>setObs(e.target.value)} placeholder="Ex: Nexus Class, pagamento via PIX..."/>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>
           <Btn onClick={handleConfirm} full={mob}>✅ Confirmar Matrícula</Btn>
@@ -343,7 +284,7 @@ function MiniMetas({ leads }) {
       const [y,m] = l.matriculaMes.split("-");
       return parseInt(m)-1 === curMonth && parseInt(y) === curYear;
     }
-    const d = new Date(l.createdAt);
+    const d = new Date(l.updatedAt || l.createdAt);
     return d.getMonth() === curMonth && d.getFullYear() === curYear;
   });
 
@@ -355,8 +296,8 @@ function MiniMetas({ leads }) {
       {UNITS.map(unit => {
         const m = METAS[unit.id];
         const total = metaLeads.filter(l => l.unit === unit.id).length;
-        const avista = metaLeads.filter(l => l.unit === unit.id && l.tipoVenda === "avista").reduce((s,l)=>s+(l.valorAvista||0),0);
-        const mensalidadeCount = metaLeads.filter(l => l.unit === unit.id && l.tipoVenda === "mensalidade").length;
+        const avista = 0; // campo removido
+        const mensalidadeCount = metaLeads.filter(l => l.unit === unit.id).length;
         const tier = getTierForUnit(unit.id, total);
         const tierInfo = COMISSAO_TIERS[tier];
         const pct = total / m.super;
@@ -1041,22 +982,22 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
     await supabase.from("leads").update({
       stage: "matriculado",
       tipo_venda: data.tipo,
-      valor_mensalidade: data.tipo === "mensalidade" ? data.valorMensalidade : null,
-      valor_avista: data.tipo === "avista" ? data.valorAvista : null,
+      valor_matricula: data.tipo === "mensalidade" ? data.valorMatricula : null,
+      valor_avista_curso: data.tipo === "avista" ? data.valorAvistaCurso : null,
     }).eq("id", leadId);
 
     if (data.obs) {
       await supabase.from("lead_history").insert({
         id: uid(), lead_id: leadId, type: "Anotação",
-        note: `💰 Matrícula registrada — ${data.tipo === "avista" ? `À Vista: ${fmtMoney(data.valorAvista)}` : `Mensalidade: ${fmtMoney(data.valorMensalidade)}`}${data.obs ? `. ${data.obs}` : ""}`,
+        note: `💰 Matrícula registrada — ${data.tipo === "avista" ? `À Vista: ${fmtMoney(data.valorAvistaCurso)}` : `Mensalidade: ${fmtMoney(data.valorMatricula)}`}${data.obs ? `. ${data.obs}` : ""}`,
         date: new Date().toISOString()
       });
     }
 
     onMove(leadId, "matriculado", {
       tipoVenda: data.tipo,
-      valorMensalidade: data.tipo === "mensalidade" ? data.valorMensalidade : 0,
-      valorAvista: data.tipo === "avista" ? data.valorAvista : 0,
+      valorMatricula: data.tipo === "mensalidade" ? data.valorMatricula : 0,
+      valorAvistaCurso: data.tipo === "avista" ? data.valorAvistaCurso : 0,
     });
     setMatriculaPending(null);
     setTimeout(()=>setCelebrating(true), 50);
@@ -1081,7 +1022,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
         {/* Valor da matrícula no card */}
         {stage.id==="matriculado"&&lead.tipoVenda&&(
           <div style={{fontSize:10,fontWeight:700,color:"#16a34a",background:"#dcfce7",borderRadius:5,padding:"2px 7px",display:"inline-block",marginBottom:2}}>
-            {lead.tipoVenda==="avista"?`💵 ${fmtMoney(lead.valorAvista)} à vista`:`📅 ${fmtMoney(lead.valorMensalidade)}/mês`}
+            {lead.tipoVenda==="avista"?`💵 ${fmtMoney(lead.valorAvistaCurso)} à vista`:`📅 ${fmtMoney(lead.valorMatricula)}/mês`}
           </div>
         )}
         {(isTd||ov)&&<div style={{background:ov?"#fef2f2":"#fefce8",color:ov?"#b91c1c":"#92400e",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700,marginTop:4,display:"inline-block"}}>{ov?"⚠ Atrasado":"🔔 Hoje"}</div>}
@@ -1110,7 +1051,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
     const displayed = isMatr && matrFilter === "mes"
       ? slRaw.filter(l => {
           if (l.matriculaMes) { const [y,m] = l.matriculaMes.split("-"); return parseInt(m)-1 === curMonth && parseInt(y) === curYear; }
-          const d = new Date(l.createdAt); return d.getMonth() === curMonth && d.getFullYear() === curYear;
+          const d = new Date(l.updatedAt || l.createdAt); return d.getMonth() === curMonth && d.getFullYear() === curYear;
         })
       : slRaw;
     const over = dragOver === stage.id;
@@ -1382,7 +1323,7 @@ function LeadsList({leads,onSelect,onAdd,mob}) {
                   <td style={{padding:"12px 16px",fontSize:12}}>
                     {lead.tipoVenda ? (
                       <span style={{color:lead.tipoVenda==="avista"?"#16a34a":"#6366f1",fontWeight:700}}>
-                        {lead.tipoVenda==="avista"?`💵 ${fmtMoney(lead.valorAvista)}`:`📅 ${fmtMoney(lead.valorMensalidade)}/mês`}
+                        {lead.tipoVenda==="avista"?`💵 ${fmtMoney(lead.valorAvistaCurso)}`:`📅 ${fmtMoney(lead.valorMatricula)}/mês`}
                       </span>
                     ) : <span style={{color:T.muted}}>—</span>}
                   </td>
@@ -1583,13 +1524,13 @@ function Relatorios({leads,mob}) {
       const [y,m] = l.matriculaMes.split("-");
       return parseInt(m)-1 === targetMonth && parseInt(y) === targetYear;
     }
-    const d = new Date(l.createdAt);
+    const d = new Date(l.updatedAt || l.createdAt);
     return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
   });
 
   const filtered = leads.filter(l => {
     if (!l.createdAt) return false;
-    const d = new Date(l.createdAt);
+    const d = new Date(l.updatedAt || l.createdAt);
     return d.getMonth()===selMonth && d.getFullYear()===selYear;
   });
 
@@ -1604,7 +1545,7 @@ function Relatorios({leads,mob}) {
   for (let i=5; i>=0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
     const m = d.getMonth(), y = d.getFullYear();
-    const ml = leads.filter(l=>{ if(!l.createdAt)return false; const ld=new Date(l.createdAt); return ld.getMonth()===m&&ld.getFullYear()===y; });
+    const ml = leads.filter(l=>{ if(!l.createdAt)return false; const ld=new Date(l.updatedAt||l.createdAt); return ld.getMonth()===m&&ld.getFullYear()===y; });
     evolution.push({label:MONTHS[m].slice(0,3),leads:ml.length,matr:ml.filter(l=>l.stage==="matriculado").length,taxa:ml.length>0?Math.round((ml.filter(l=>l.stage==="matriculado").length/ml.length)*100):0});
   }
   const maxLeads = Math.max(...evolution.map(e=>e.leads), 1);
@@ -1638,8 +1579,8 @@ function Relatorios({leads,mob}) {
           const mensalidadeLeads = unitLeads.filter(l => l.tipoVenda === "mensalidade");
           const avistaLeads = unitLeads.filter(l => l.tipoVenda === "avista");
           const totalMensalidades = mensalidadeLeads.length;
-          const totalAvista = avistaLeads.reduce((s, l) => s + (l.valorAvista || 0), 0);
-          const totalMensalidadeVal = mensalidadeLeads.reduce((s, l) => s + (l.valorMensalidade || 0), 0);
+          const totalAvista = avistaLeads.reduce((s, l) => s + (l.valorAvistaCurso || 0), 0);
+          const totalMensalidadeVal = mensalidadeLeads.reduce((s, l) => s + (l.valorMatricula || 0), 0);
 
           // Determine tier — super requires conditions
           const rawTier = getTierForUnit(unit.id, total);
@@ -1760,8 +1701,8 @@ function Relatorios({leads,mob}) {
               const mensalidadeLeads = unitLeads.filter(l => l.tipoVenda === "mensalidade");
               const avistaLeads = unitLeads.filter(l => l.tipoVenda === "avista");
               const totalMensalidades = mensalidadeLeads.length;
-              const totalAvista = avistaLeads.reduce((s,l)=>s+(l.valorAvista||0),0);
-              const totalMensalidadeVal = mensalidadeLeads.reduce((s,l)=>s+(l.valorMensalidade||0),0);
+              const totalAvista = avistaLeads.reduce((s,l)=>s+(l.valorAvistaCurso||0),0);
+              const totalMensalidadeVal = mensalidadeLeads.reduce((s,l)=>s+(l.valorMatricula||0),0);
               const rawTier = getTierForUnit(unit.id, total);
               const superValid = rawTier === "super" && isSuperMetaValid(unit.id, totalMensalidades, totalAvista);
               const effectiveTier = rawTier === "super" && !superValid ? "ideal" : rawTier;
@@ -1788,8 +1729,8 @@ function Relatorios({leads,mob}) {
                 const mensalidadeLeads = unitLeads.filter(l => l.tipoVenda === "mensalidade");
                 const avistaLeads = unitLeads.filter(l => l.tipoVenda === "avista");
                 const totalMensalidades = mensalidadeLeads.length;
-                const totalAvista = avistaLeads.reduce((s,l)=>s+(l.valorAvista||0),0);
-                const totalMensalidadeVal = mensalidadeLeads.reduce((s,l)=>s+(l.valorMensalidade||0),0);
+                const totalAvista = avistaLeads.reduce((s,l)=>s+(l.valorAvistaCurso||0),0);
+                const totalMensalidadeVal = mensalidadeLeads.reduce((s,l)=>s+(l.valorMatricula||0),0);
                 const rawTier = getTierForUnit(unit.id, total);
                 const superValid = rawTier === "super" && isSuperMetaValid(unit.id, totalMensalidades, totalAvista);
                 const effectiveTier = rawTier === "super" && !superValid ? "ideal" : rawTier;
@@ -1908,7 +1849,7 @@ function Relatorios({leads,mob}) {
             <tbody>
               {[...evolution].reverse().map((e,i)=>{
                 const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-                const ml = leads.filter(l=>{ if(!l.createdAt)return false; const ld=new Date(l.createdAt); return ld.getMonth()===d.getMonth()&&ld.getFullYear()===d.getFullYear(); });
+                const ml = leads.filter(l=>{ if(!l.createdAt)return false; const ld=new Date(l.updatedAt||l.createdAt); return ld.getMonth()===d.getMonth()&&ld.getFullYear()===d.getFullYear(); });
                 const perd = ml.filter(l=>l.stage==="perdido").length;
                 return (
                   <tr key={i} className="rw" style={{borderBottom:`1px solid ${T.border}`}}>
@@ -2024,10 +1965,10 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const handleEditMatricula = async (data) => {
     await supabase.from("leads").update({
       tipo_venda: data.tipo,
-      valor_mensalidade: data.tipo === "mensalidade" ? data.valorMensalidade : null,
-      valor_avista: data.tipo === "avista" ? data.valorAvista : null,
+      valor_matricula: data.tipo === "mensalidade" ? data.valorMatricula : null,
+      valor_avista_curso: data.tipo === "avista" ? data.valorAvistaCurso : null,
     }).eq("id", lead.id);
-    onUpdate({...lead, tipoVenda: data.tipo, valorMensalidade: data.tipo==="mensalidade"?data.valorMensalidade:0, valorAvista: data.tipo==="avista"?data.valorAvista:0});
+    onUpdate({...lead, tipoVenda: data.tipo, valorMatricula: data.tipo==="mensalidade"?data.valorMatricula:0, valorAvistaCurso: data.tipo==="avista"?data.valorAvistaCurso:0});
     setEditMatriculaModal(false);
   };
 
@@ -2126,7 +2067,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
               </div>
               {lead.tipoVenda ? (
                 <div style={{fontSize:15,fontWeight:700,color:"#16a34a"}}>
-                  {lead.tipoVenda==="avista"?`💵 À Vista: ${fmtMoney(lead.valorAvista)}`:`📅 Mensalidade: ${fmtMoney(lead.valorMensalidade)}/mês`}
+                  {lead.tipoVenda==="avista"?`💵 À Vista: ${fmtMoney(lead.valorAvistaCurso)}`:`📅 Mensalidade: ${fmtMoney(lead.valorMatricula)}/mês`}
                 </div>
               ) : (
                 <div style={{fontSize:13,color:"#15803d",fontStyle:"italic"}}>Nenhum valor registrado. <button onClick={()=>setEditMatriculaModal(true)} style={{background:"none",border:"none",color:T.accent,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:700,padding:0}}>Registrar →</button></div>
@@ -2531,7 +2472,8 @@ function PainelMetas({leads, mob}) {
       const [y,m] = l.matriculaMes.split("-");
       return parseInt(m)-1 === selMonth && parseInt(y) === selYear;
     }
-    const d = new Date(l.createdAt);
+    // Fallback: usa updated_at (quando o stage foi alterado) ou created_at
+    const d = new Date(l.updatedAt || l.createdAt);
     return d.getMonth() === selMonth && d.getFullYear() === selYear;
   });
 
@@ -2540,15 +2482,15 @@ function PainelMetas({leads, mob}) {
     const matrLeads   = getMatrMes(u.id);
     const m           = METAS[u.id];
     const count       = matrLeads.length;
-    const mensLeads   = matrLeads.filter(l => l.tipoVenda === "mensalidade");
-    const avistaLeads = matrLeads.filter(l => l.tipoVenda === "avista");
-    const totalMensVal  = mensLeads.reduce((s,l) => s+(l.valorMensalidade||0), 0);
-    const totalAvistaVal= avistaLeads.reduce((s,l) => s+(l.valorAvista||0), 0);
+    const mensLeads   = matrLeads; // todos os matriculados
+    const avistaLeads = [];
+    const totalMensVal  = matrLeads.reduce((s,l) => s+(l.valorMatricula||0), 0);
+    const totalAvistaVal= 0;
     const tier        = getTierForUnit(u.id, count);
     const tierInfo    = COMISSAO_TIERS[tier];
-    const superValida = tier === "super" && isSuperMetaValid(u.id, mensLeads.length, totalAvistaVal);
+    const superValida = tier === "super" && isSuperMetaValid(u.id, count, totalAvistaVal);
     const comissaoBase= totalMensVal * tierInfo.pct;
-    const premioPago  = totalAvistaVal >= m.avistaMin ? m.avistaPremio : 0;
+    const premioPago  = 0; // prêmio à vista removido — era por tipo de pagamento
     const comissaoTotal = comissaoBase + premioPago;
 
     // Projeção: ritmo atual → extrapolado pro fim do mês
@@ -2570,7 +2512,7 @@ function PainelMetas({leads, mob}) {
       const cnt = leads.filter(l => {
         if(l.stage!=="matriculado"||l.unit!==u.id) return false;
         if(l.matriculaMes){const[y,mo]=l.matriculaMes.split("-");return parseInt(mo)-1===d.getMonth()&&parseInt(y)===d.getFullYear();}
-        const ld=new Date(l.createdAt);return ld.getMonth()===d.getMonth()&&ld.getFullYear()===d.getFullYear();
+        const ld=new Date(l.updatedAt||l.createdAt);return ld.getMonth()===d.getMonth()&&ld.getFullYear()===d.getFullYear();
       }).length;
       return { label: MONTHS[d.getMonth()].slice(0,3), count: cnt };
     }).reverse();
@@ -2717,7 +2659,7 @@ function PainelMetas({leads, mob}) {
                   {u.avistaLeads.map(l=>(
                     <div key={l.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,background:"#f0fdf4",borderRadius:8,padding:"6px 10px"}}>
                       <span style={{fontWeight:600}}>{l.name}</span>
-                      <span style={{fontWeight:700,color:"#10b981"}}>{fmtMoney(l.valorAvista)}</span>
+                      <span style={{fontWeight:700,color:"#10b981"}}>{fmtMoney(l.valorAvistaCurso)}</span>
                     </div>
                   ))}
                 </div>
@@ -2811,7 +2753,7 @@ function PainelMetas({leads, mob}) {
                       </div>
                       <div style={{textAlign:"right"}}>
                         <div style={{fontWeight:700,fontSize:13,color:l.tipoVenda==="avista"?"#10b981":"#6366f1"}}>
-                          {l.tipoVenda==="avista"?"💵":"📅"} {fmtMoney(l.tipoVenda==="avista"?l.valorAvista:l.valorMensalidade)}
+                          {l.tipoVenda==="avista"?"💵":"📅"} {fmtMoney(l.tipoVenda==="avista"?l.valorAvistaCurso:l.valorMatricula)}
                         </div>
                         <div style={{fontSize:10,color:T.muted}}>{l.tipoVenda==="avista"?"À Vista":"Mensalidade"}</div>
                       </div>
@@ -3192,7 +3134,7 @@ export default function App() {
     if(!session)return;
     setDbLoading(true);
     (async()=>{
-      const{data:ld}=await supabase.from("leads").select("*").order("created_at",{ascending:false});
+      const{data:ld}=await supabase.from("leads").select("*,updated_at").order("created_at",{ascending:false});
       const{data:hd}=await supabase.from("lead_history").select("*").order("date",{ascending:false});
       const{data:waUnread}=await supabase.from("whatsapp_messages").select("lead_id").eq("direction","in").eq("read",false);
       const unreadMap={};
@@ -3200,11 +3142,11 @@ export default function App() {
       setLeads((ld||[]).map(l=>({
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
         stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,
-        cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,matriculaMes:l.matricula_mes||null,
+        cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,matriculaMes:l.matricula_mes||null,updatedAt:l.updated_at||l.created_at,
         // Matrícula fields
         tipoVenda:l.tipo_venda||null,
-        valorMensalidade:l.valor_mensalidade||0,
-        valorAvista:l.valor_avista||0,
+        valorMatricula:l.valor_matricula||0,
+        valorAvistaCurso:l.valor_avista_curso||0,
         followUp:l.follow_up_date?{date:l.follow_up_date,note:l.follow_up_note||"",time:l.follow_up_time||""}:null,
         history:(hd||[]).filter(h=>h.lead_id===l.id).map(h=>({id:h.id,type:h.type,note:h.note,date:h.date})),
         unreadCount:unreadMap[l.id]||0,
@@ -3222,8 +3164,8 @@ export default function App() {
     const updates={stage:sid};
     if(extraData){
       if(extraData.tipoVenda) updates.tipo_venda=extraData.tipoVenda;
-      if(extraData.valorMensalidade!=null) updates.valor_mensalidade=extraData.valorMensalidade;
-      if(extraData.valorAvista!=null) updates.valor_avista=extraData.valorAvista;
+      if(extraData.valorMatricula!=null) updates.valor_matricula=extraData.valorMatricula;
+      if(extraData.valorAvistaCurso!=null) updates.valor_avista_curso=extraData.valorAvistaCurso;
     }
     await supabase.from("leads").update(updates).eq("id",lid);
     setLeads(p=>p.map(l=>l.id===lid?{...l,stage:sid,...(extraData||{})}:l));
