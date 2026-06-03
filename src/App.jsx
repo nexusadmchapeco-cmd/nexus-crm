@@ -2266,182 +2266,237 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
 /* ─── SIMULADOR DE COMISSÕES ─────────────────────────────────────── */
 function SimuladorComissoes({mob}) {
   const [simUnit, setSimUnit] = useState("pf");
-  const [simMens, setSimMens] = useState(10);
-  const [simValMens, setSimValMens] = useState(350);
-  const [simAvistaQtd, setSimAvistaQtd] = useState(2);
-  const [simValAvista, setSimValAvista] = useState(4800);
+  const [modoTotal, setModoTotal] = useState(false);
 
-  const m = METAS[simUnit];
-  const totalMatrSim = simMens + simAvistaQtd;
-  const tier = getTierForUnit(simUnit, totalMatrSim);
-  const tierInfo = COMISSAO_TIERS[tier];
-  const totalMensVal = simMens * simValMens;
-  const totalAvistaVal = simAvistaQtd * simValAvista;
-  const comissaoMens = totalMensVal * tierInfo.pct;
-  const bateuAvista = totalAvistaVal >= m.avistaMin;
-  const premio = bateuAvista ? m.avistaPremio : 0;
-  const total = comissaoMens + premio;
-  const superValida = tier==="super" && isSuperMetaValid(simUnit, simMens, totalAvistaVal);
-  const barColor = tier==="super"?"#10b981":tier==="ideal"?"#6366f1":tier==="minima"?"#f59e0b":"#94a3b8";
-  const barW = Math.min((totalMatrSim/m.super)*100,100);
+  // Estado por unidade (para modo total)
+  const [sims, setSims] = useState({
+    pf:     { qtd:10, val:350 },
+    chape:  { qtd:10, val:350 },
+    online: { qtd:4,  val:350 },
+  });
 
-  const faixas = ["minima","ideal","super"].map(t=>({
-    t, info: COMISSAO_TIERS[t],
-    matrMin: t==="minima"?0:t==="ideal"?m.ideal:m.super,
-    comissao: totalMensVal * COMISSAO_TIERS[t].pct + (bateuAvista?m.avistaPremio:0),
-  }));
+  // Estado modo unidade única
+  const [simQtd, setSimQtd] = useState(10);
+  const [simVal, setSimVal] = useState(350);
+
+  const calcUnit = (unitId, qtd, val) => {
+    const m = METAS[unitId];
+    const tier = getTierForUnit(unitId, qtd);
+    const pct = COMISSAO_TIERS[tier].pct;
+    const comissao = qtd * val * pct;
+    return { tier, pct, comissao, barW: Math.min((qtd/m.super)*100,100), m };
+  };
+
+  // Modo unidade única
+  const unitCalc = calcUnit(simUnit, simQtd, simVal);
+  const barColor = unitCalc.tier==="super"?"#10b981":unitCalc.tier==="ideal"?"#6366f1":"#f59e0b";
+
+  // Modo total — calcula cada unidade separado e soma
+  const totalCalcs = UNITS.map(u => {
+    const s = sims[u.id];
+    const r = calcUnit(u.id, s.qtd, s.val);
+    return { ...u, ...s, ...r };
+  });
+  const grandTotal = totalCalcs.reduce((sum,u) => sum + u.comissao, 0);
+
+  const setUnitSim = (unitId, field, val) => setSims(p=>({...p,[unitId]:{...p[unitId],[field]:Number(val)}}));
+
+  const SliderRow = ({label, value, min, max, step=1, onChange, color, format}) => (
+    <div>
+      <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>
+        {label}: <span style={{color,fontSize:13}}>{format?format(value):value}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}
+        style={{width:"100%",accentColor:color,cursor:"pointer"}}/>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.muted,marginTop:1}}>
+        <span>{format?format(min):min}</span><span>{format?format(max):max}</span>
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{background:"#fff",border:`1.5px solid ${barColor}44`,borderRadius:T.radius,overflow:"hidden",marginBottom:20,boxShadow:`0 4px 20px ${barColor}18`}}>
-      <div style={{padding:"16px 22px",borderBottom:`1px solid ${T.border}`,background:`linear-gradient(135deg,${barColor}12,transparent)`,display:"flex",alignItems:"center",gap:10}}>
-        <span style={{fontSize:20}}>🧮</span>
-        <div>
-          <div style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:700}}>Simulador de Comissões</div>
-          <div style={{fontSize:12,color:T.muted,marginTop:1}}>Simule diferentes cenários e veja o impacto na comissão</div>
+    <div style={{background:"#fff",border:`1.5px solid #6366f144`,borderRadius:T.radius,overflow:"hidden",marginBottom:20,boxShadow:"0 4px 20px #6366f118"}}>
+      {/* Header */}
+      <div style={{padding:"16px 22px",borderBottom:`1px solid ${T.border}`,background:"linear-gradient(135deg,#6366f112,transparent)",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:20}}>🧮</span>
+          <div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:700}}>Simulador de Comissões</div>
+            <div style={{fontSize:12,color:T.muted,marginTop:1}}>Simule cenários e veja o impacto na comissão</div>
+          </div>
+        </div>
+        {/* Toggle modo */}
+        <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:10,padding:4}}>
+          {[{id:false,label:"Por Unidade"},{id:true,label:"💰 Total Geral"}].map(opt=>(
+            <button key={String(opt.id)} onClick={()=>setModoTotal(opt.id)} className="tap"
+              style={{background:modoTotal===opt.id?"#6366f1":"transparent",color:modoTotal===opt.id?"white":T.muted,border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
-      <div style={{padding:mob?"16px":"20px 24px",display:"grid",gap:20}}>
-        {/* Seletor de unidade */}
-        <div>
-          <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Unidade</div>
+
+      <div style={{padding:mob?"14px":"20px 24px",display:"grid",gap:20}}>
+
+        {/* ── MODO UNIDADE ÚNICA ── */}
+        {!modoTotal && (<>
+          {/* Seletor de unidade */}
           <div style={{display:"flex",gap:8}}>
             {UNITS.map(u=>(
-              <button key={u.id} type="button" onClick={()=>setSimUnit(u.id)} className="tap"
+              <button key={u.id} onClick={()=>setSimUnit(u.id)} className="tap"
                 style={{flex:1,background:simUnit===u.id?u.color:"transparent",border:`1.5px solid ${simUnit===u.id?u.border:T.border}`,borderRadius:10,padding:"10px 8px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:simUnit===u.id?u.text:T.muted,transition:"all .15s"}}>
                 {u.label}
               </button>
             ))}
           </div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:16}}>
-          {/* Mensalidades */}
-          <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:12,padding:"16px"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#1d4ed8",marginBottom:12}}>📅 Mensalidades</div>
-            <div style={{display:"grid",gap:12}}>
-              <label>
-                <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>
-                  Quantidade: <span style={{color:"#1d4ed8",fontSize:14}}>{simMens}</span>
-                </div>
-                <input type="range" min={0} max={30} value={simMens} onChange={e=>setSimMens(Number(e.target.value))} style={{width:"100%",accentColor:"#3b82f6",cursor:"pointer"}}/>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.muted,marginTop:2}}><span>0</span><span>30</span></div>
-              </label>
-              <label>
-                <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>
-                  Valor médio: <span style={{color:"#1d4ed8",fontSize:14}}>R$ {simValMens}</span>
-                </div>
-                <input type="range" min={200} max={1000} step={50} value={simValMens} onChange={e=>setSimValMens(Number(e.target.value))} style={{width:"100%",accentColor:"#3b82f6",cursor:"pointer"}}/>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.muted,marginTop:2}}><span>R$200</span><span>R$1000</span></div>
-              </label>
-              <div style={{background:"white",borderRadius:8,padding:"8px 12px",fontSize:13}}>
-                <span style={{color:T.muted}}>Receita mensal: </span>
-                <span style={{fontWeight:700,color:"#1d4ed8"}}>{fmtMoney(totalMensVal)}</span>
-              </div>
-            </div>
-          </div>
-          {/* À vista */}
-          <div style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:12,padding:"16px"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#92400e",marginBottom:12}}>💵 À Vista</div>
-            <div style={{display:"grid",gap:12}}>
-              <label>
-                <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>
-                  Quantidade: <span style={{color:"#92400e",fontSize:14}}>{simAvistaQtd}</span>
-                </div>
-                <input type="range" min={0} max={15} value={simAvistaQtd} onChange={e=>setSimAvistaQtd(Number(e.target.value))} style={{width:"100%",accentColor:"#f59e0b",cursor:"pointer"}}/>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.muted,marginTop:2}}><span>0</span><span>15</span></div>
-              </label>
-              <label>
-                <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>
-                  Ticket médio: <span style={{color:"#92400e",fontSize:14}}>R$ {simValAvista}</span>
-                </div>
-                <input type="range" min={1000} max={15000} step={200} value={simValAvista} onChange={e=>setSimValAvista(Number(e.target.value))} style={{width:"100%",accentColor:"#f59e0b",cursor:"pointer"}}/>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.muted,marginTop:2}}><span>R$1k</span><span>R$15k</span></div>
-              </label>
-              <div style={{background:"white",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:11,color:T.muted}}>Total à vista: <span style={{fontWeight:700,color:"#92400e"}}>{fmtMoney(totalAvistaVal)}</span></div>
-                  <div style={{fontSize:11,color:T.muted}}>Meta: {fmtMoney(m.avistaMin)}</div>
-                </div>
-                <span style={{fontSize:18}}>{bateuAvista?"✅":"⏳"}</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Resultado */}
-        <div style={{background:`linear-gradient(135deg,${barColor}18,${barColor}08)`,border:`2px solid ${barColor}44`,borderRadius:14,padding:"20px 24px"}}>
-          <div style={{marginBottom:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontSize:13,fontWeight:700,color:barColor}}>{totalMatrSim} matrículas totais</span>
-              <span style={{fontSize:12,color:T.muted}}>{barW.toFixed(0)}% da super</span>
-            </div>
-            <div style={{position:"relative",height:10,background:"rgba(0,0,0,.06)",borderRadius:5}}>
-              <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${barW}%`,background:barColor,borderRadius:5,transition:"width .3s ease"}}/>
-              {[(m.minima/m.super)*100,(m.ideal/m.super)*100].map((pos,i)=>(
-                <div key={i} style={{position:"absolute",left:`${pos}%`,top:-3,width:2,height:16,background:i===0?"#f59e0b":"#6366f1",borderRadius:1,transform:"translateX(-50%)"}}/>
-              ))}
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.muted,marginTop:4}}>
-              <span>Mín {m.minima}</span><span>Ideal {m.ideal}</span><span>Super {m.super}+</span>
-            </div>
+          {/* Sliders */}
+          <div style={{background:"#f8fafc",border:`1px solid ${T.border}`,borderRadius:12,padding:"16px",display:"grid",gap:14}}>
+            <SliderRow label="Matrículas" value={simQtd} min={0} max={30} onChange={setSimQtd} color={barColor}/>
+            <SliderRow label="Valor médio por matrícula" value={simVal} min={100} max={2000} step={50} onChange={setSimVal} color={barColor} format={v=>`R$ ${v}`}/>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
-            <div style={{background:tierInfo.color+"22",border:`1.5px solid ${tierInfo.color}44`,borderRadius:20,padding:"6px 16px",fontSize:13,fontWeight:700,color:tierInfo.color}}>
-              {tier==="super"&&superValida?"🚀 Super Meta":tier==="super"?"⚠ Super (inválida)":tier==="ideal"?"⭐ Meta Ideal":tier==="minima"?"✅ Meta Mínima":"— Abaixo da Mínima"}
-            </div>
-            <div style={{background:"rgba(0,0,0,.05)",borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:700,color:T.muted}}>{(tierInfo.pct*100).toFixed(0)}% de comissão</div>
-            {bateuAvista&&<div style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:700,color:"#15803d"}}>💰 +{fmtMoney(m.avistaPremio)} prêmio</div>}
-          </div>
-          <div style={{display:"grid",gap:6,marginBottom:16}}>
-            {[
-              {label:`${simMens} mensalidades × R$${simValMens} × ${(tierInfo.pct*100).toFixed(0)}%`, value:comissaoMens, color:barColor},
-              {label:`Prêmio à vista ${bateuAvista?"✅":"⏳ (faltam "+fmtMoney(Math.max(0,m.avistaMin-totalAvistaVal))+")"}`, value:premio, color:"#10b981"},
-            ].map((row,i)=>(
-              <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"6px 0",borderBottom:`1px solid rgba(0,0,0,.06)`}}>
-                <span style={{color:T.muted}}>{row.label}</span>
-                <span style={{fontWeight:700,color:row.value>0?row.color:T.muted}}>{fmtMoney(row.value)}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:15,fontWeight:700}}>💰 Comissão Total</span>
-            <span style={{fontSize:mob?28:36,fontWeight:800,color:barColor,letterSpacing:"-1px"}}>{fmtMoney(total)}</span>
-          </div>
-        </div>
 
-        {/* Tabela "e se?" */}
-        <div>
-          <div style={{fontSize:12,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>E se você batesse cada faixa com esses valores?</div>
-          <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:8}}>
-            {faixas.map(f=>{
-              const isActive = f.t===tier;
-              const faltamFaixa = Math.max(0, f.matrMin - totalMatrSim);
+          {/* Resultado */}
+          <div style={{background:`linear-gradient(135deg,${barColor}18,${barColor}08)`,border:`2px solid ${barColor}44`,borderRadius:14,padding:"20px 24px"}}>
+            {/* Barra */}
+            <div style={{marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                <span style={{fontSize:13,fontWeight:700,color:barColor}}>{simQtd} matrículas</span>
+                <span style={{fontSize:12,color:T.muted}}>{unitCalc.barW.toFixed(0)}% da super</span>
+              </div>
+              <div style={{position:"relative",height:10,background:"rgba(0,0,0,.06)",borderRadius:5}}>
+                <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${unitCalc.barW}%`,background:barColor,borderRadius:5,transition:"width .3s"}}/>
+                {[(unitCalc.m.ideal/unitCalc.m.super)*100].map((pos,i)=>(
+                  <div key={i} style={{position:"absolute",left:`${pos}%`,top:-3,width:2,height:16,background:"#6366f1",borderRadius:1,transform:"translateX(-50%)"}}/>
+                ))}
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.muted,marginTop:3}}>
+                <span>0–{unitCalc.m.ideal-1}</span><span>Ideal {unitCalc.m.ideal}</span><span>Super {unitCalc.m.super}+</span>
+              </div>
+            </div>
+            {/* Badge */}
+            <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+              <div style={{background:COMISSAO_TIERS[unitCalc.tier].color+"22",border:`1.5px solid ${COMISSAO_TIERS[unitCalc.tier].color}44`,borderRadius:20,padding:"5px 14px",fontSize:13,fontWeight:700,color:COMISSAO_TIERS[unitCalc.tier].color}}>
+                {unitCalc.tier==="super"?"🚀 Super Meta":unitCalc.tier==="ideal"?"⭐ Meta Ideal":"✅ Base"}
+              </div>
+              <div style={{background:"rgba(0,0,0,.05)",borderRadius:20,padding:"5px 14px",fontSize:13,fontWeight:700,color:T.muted}}>{(unitCalc.pct*100).toFixed(0)}% comissão</div>
+            </div>
+            {/* Breakdown */}
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"6px 0",borderBottom:`1px solid rgba(0,0,0,.06)`,marginBottom:10}}>
+              <span style={{color:T.muted}}>{simQtd} matrículas × R${simVal} × {(unitCalc.pct*100).toFixed(0)}%</span>
+              <span style={{fontWeight:700,color:barColor}}>{fmtMoney(unitCalc.comissao)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:15,fontWeight:700}}>💰 Comissão Total</span>
+              <span style={{fontSize:mob?28:36,fontWeight:800,color:barColor,letterSpacing:"-1px"}}>{fmtMoney(unitCalc.comissao)}</span>
+            </div>
+          </div>
+
+          {/* E se? */}
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>E se batesse cada faixa com R${simVal}/matrícula?</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              {["minima","ideal","super"].map(t=>{
+                const info = COMISSAO_TIERS[t];
+                const m = METAS[simUnit];
+                const qtdRef = t==="minima"?Math.max(simQtd,1):t==="ideal"?m.ideal:m.super;
+                const com = qtdRef * simVal * info.pct;
+                const isActive = unitCalc.tier===t;
+                const faltam = t==="minima"?0:t==="ideal"?Math.max(0,m.ideal-simQtd):Math.max(0,m.super-simQtd);
+                return (
+                  <div key={t} style={{background:isActive?info.color+"18":"#f8fafc",border:`1.5px solid ${isActive?info.color:T.border}`,borderRadius:12,padding:"12px",textAlign:"center"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:isActive?info.color:T.muted,marginBottom:2}}>{info.label}</div>
+                    <div style={{fontSize:10,color:T.muted,marginBottom:6}}>{t==="minima"?"0–"+(m.ideal-1):t==="ideal"?`${m.ideal}–${m.super-1}`:`${m.super}+`} matr.</div>
+                    <div style={{fontSize:mob?15:19,fontWeight:800,color:isActive?info.color:T.muted}}>{fmtMoney(com)}</div>
+                    {faltam>0&&<div style={{fontSize:10,color:T.muted,marginTop:3}}>+{faltam} matr.</div>}
+                    {isActive&&<div style={{fontSize:9,fontWeight:800,color:info.color,marginTop:3,textTransform:"uppercase"}}>← atual</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>)}
+
+        {/* ── MODO TOTAL GERAL ── */}
+        {modoTotal && (<>
+          <div style={{display:"grid",gap:12}}>
+            {totalCalcs.map(u=>{
+              const uColor = u.tier==="super"?"#10b981":u.tier==="ideal"?"#6366f1":"#f59e0b";
               return (
-                <div key={f.t} style={{background:isActive?f.info.color+"18":"#f8fafc",border:`1.5px solid ${isActive?f.info.color:T.border}`,borderRadius:12,padding:"12px",textAlign:"center",transition:"all .15s"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:isActive?f.info.color:T.muted,marginBottom:4}}>{f.info.label}</div>
-                  <div style={{fontSize:11,color:T.muted,marginBottom:6}}>{f.t==="minima"?"0–"+(m.ideal-1):f.t==="ideal"?`${m.ideal}–${m.super-1}`:`${m.super}+`} matr.</div>
-                  <div style={{fontSize:mob?16:20,fontWeight:800,color:isActive?f.info.color:T.muted}}>{fmtMoney(f.comissao)}</div>
-                  {faltamFaixa>0&&<div style={{fontSize:10,color:T.muted,marginTop:4}}>+{faltamFaixa} matr.</div>}
-                  {isActive&&<div style={{fontSize:9,fontWeight:800,color:f.info.color,marginTop:4,textTransform:"uppercase"}}>← você está aqui</div>}
+                <div key={u.id} style={{background:u.color,border:`1.5px solid ${u.border}`,borderRadius:12,padding:"16px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div style={{fontWeight:700,fontSize:14,color:u.text}}>{u.label}</div>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <span style={{background:COMISSAO_TIERS[u.tier].color+"22",color:COMISSAO_TIERS[u.tier].color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
+                        {u.tier==="super"?"🚀 Super":u.tier==="ideal"?"⭐ Ideal":"✅ Base"} · {(u.pct*100).toFixed(0)}%
+                      </span>
+                      <span style={{fontWeight:800,fontSize:16,color:uColor}}>{fmtMoney(u.comissao)}</span>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <SliderRow label="Matrículas" value={u.qtd} min={0} max={30} onChange={v=>setUnitSim(u.id,"qtd",v)} color={uColor}/>
+                    <SliderRow label="Valor médio" value={u.val} min={100} max={2000} step={50} onChange={v=>setUnitSim(u.id,"val",v)} color={uColor} format={v=>`R$ ${v}`}/>
+                  </div>
+                  {/* Mini barra */}
+                  <div style={{marginTop:10,position:"relative",height:6,background:"rgba(0,0,0,.08)",borderRadius:3}}>
+                    <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${u.barW}%`,background:uColor,borderRadius:3,transition:"width .3s"}}/>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:u.text,opacity:.7,marginTop:3}}>
+                    <span>Base 0–{u.m.ideal-1}</span><span>Ideal {u.m.ideal}</span><span>Super {u.m.super}+</span>
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
 
-        {/* Aviso super inválida */}
-        {tier==="super"&&!superValida&&(
-          <div style={{background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:10,padding:"12px 16px",fontSize:13}}>
-            <div style={{fontWeight:700,color:"#92400e",marginBottom:4}}>⚠ Super Meta não válida ainda</div>
-            <div style={{color:T.muted,display:"flex",flexDirection:"column",gap:2}}>
-              {simMens < m.superMensalidadeMin && <span>• Faltam {m.superMensalidadeMin - simMens} mensalidades (mín. {m.superMensalidadeMin})</span>}
-              {!bateuAvista && <span>• Faltam {fmtMoney(m.avistaMin - totalAvistaVal)} em vendas à vista</span>}
+          {/* Total consolidado */}
+          <div style={{background:"linear-gradient(135deg,#10b98118,#10b98108)",border:"2px solid #10b98144",borderRadius:14,padding:"20px 24px"}}>
+            <div style={{fontSize:13,fontWeight:700,color:T.muted,marginBottom:14}}>Detalhamento por unidade</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+              {totalCalcs.map(u=>{
+                const uColor = u.tier==="super"?"#10b981":u.tier==="ideal"?"#6366f1":"#f59e0b";
+                return (
+                  <div key={u.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"6px 0",borderBottom:`1px solid rgba(0,0,0,.06)`}}>
+                    <span style={{color:T.muted}}>{u.label} · {u.qtd} matr. × R${u.val} × {(u.pct*100).toFixed(0)}%</span>
+                    <span style={{fontWeight:700,color:uColor}}>{fmtMoney(u.comissao)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:15,fontWeight:700}}>💰 Comissão Total Geral</span>
+              <span style={{fontSize:mob?32:42,fontWeight:800,color:"#10b981",letterSpacing:"-2px"}}>{fmtMoney(grandTotal)}</span>
             </div>
           </div>
-        )}
+
+          {/* Faixas potencial */}
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Potencial se todas as unidades batessem cada faixa</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              {["minima","ideal","super"].map(t=>{
+                const info = COMISSAO_TIERS[t];
+                const potencial = UNITS.reduce((sum,u)=>{
+                  const s = sims[u.id];
+                  const m = METAS[u.id];
+                  const qtdRef = t==="minima"?Math.max(s.qtd,1):t==="ideal"?m.ideal:m.super;
+                  return sum + qtdRef * s.val * info.pct;
+                },0);
+                const isActive = totalCalcs.every(u=>u.tier===t);
+                return (
+                  <div key={t} style={{background:info.color+"18",border:`1.5px solid ${info.color}44`,borderRadius:12,padding:"12px",textAlign:"center"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:info.color,marginBottom:4}}>{info.label}</div>
+                    <div style={{fontSize:mob?16:22,fontWeight:800,color:info.color}}>{fmtMoney(potencial)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>)}
       </div>
     </div>
   );
 }
+
 
 /* ─── PAINEL METAS ───────────────────────────────────────────────── */
 function PainelMetas({leads, mob}) {
