@@ -2318,7 +2318,7 @@ function AgenteIA({leads, mob}) {
 }
 
 /* ─── SIDEBAR ────────────────────────────────────────────────────── */
-function Sidebar({active,onChange,fuCount,waUnread,cadLate,onLogout,userEmail}) {
+function Sidebar({active,onChange,fuCount,waUnread,cadLate,onLogout,userEmail,leads,userProfile}) {
   return (
     <aside style={{width:220,background:"#111111",display:"flex",flexDirection:"column",height:"100vh",position:"sticky",top:0,flexShrink:0}}>
       <div style={{padding:"24px 20px 16px"}}>
@@ -2376,6 +2376,7 @@ export default function App() {
   const mob=useIsMobile();
   const [session,setSession]=useState(null),[authLoading,setAuthLoading]=useState(true);
   const [leads,setLeads]=useState([]),[dbLoading,setDbLoading]=useState(false);
+  const [userProfile,setUserProfile]=useState(null);
   const [page,setPage]=useState("pipeline");
   const [selected,setSelected]=useState(null),[showAdd,setShowAdd]=useState(false),[showQuick,setShowQuick]=useState(false);
 
@@ -2385,7 +2386,6 @@ export default function App() {
     return()=>subscription.unsubscribe();
   },[]);
 
-  const [userProfile,setUserProfile]=useState(null);
 
   useEffect(()=>{
     if(!session)return;
