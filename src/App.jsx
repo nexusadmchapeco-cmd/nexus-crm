@@ -512,7 +512,8 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const [loading,setLoading]=useState(true);
   const [bookModal,setBookModal]=useState(null);
   const [allLeadsMap,setAllLeadsMap]=useState({});
-  const [selectedSlotLead,setSelectedSlotLead]=useState(null); // {date, time}
+  const [selectedSlotLead,setSelectedSlotLead]=useState(null);
+  const [mobDay,setMobDay]=useState(today()); // {date, time}
   const [blockMode,setBlockMode]=useState(false);
   const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao"});
   const [saving,setSaving]=useState(false);
@@ -520,7 +521,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const weekDates=getWeekDates(weekBase);
   const workDates=getWeekDates(weekBase); // Mon(0)..Sat(5)
 
-  useEffect(()=>{ loadData(); },[weekBase]);
+  useEffect(()=>{ loadData(); setMobDay(workDates.includes(today())?today():workDates[0]); },[weekBase]);
   useEffect(()=>{
     (async()=>{
       const{data}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
@@ -690,8 +691,104 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
         </span>
       </div>
 
-      {/* Calendar grid */}
-      {loading?<div style={{textAlign:"center",padding:40}}><Spinner/></div>:(
+      {/* Mobile agenda view */}
+      {mob&&!loading&&(()=>{
+        const daySlotsAll=0; // unused
+        const daySlots=HOURS.map(h=>({hour:h,slots:getSlotsAt(mobDay,h),blk:isBlocked(mobDay,h)})).filter(x=>x.slots.length>0||x.blk);
+        const d=new Date(mobDay+"T12:00:00");
+        const isToday=mobDay===ts;
+        return(
+          <div>
+            {/* Day selector strip */}
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:16,WebkitOverflowScrolling:"touch"}}>
+              {workDates.map(date=>{
+                const dd=new Date(date+"T12:00:00");
+                const on=date===mobDay;
+                const isT=date===ts;
+                const cnt=HOURS.reduce((sum,h)=>sum+getSlotsAt(date,h).length,0);
+                return(
+                  <button key={date} onClick={()=>setMobDay(date)} className="tap"
+                    style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"10px 14px",borderRadius:12,border:`1.5px solid ${on?T.accent:T.border}`,background:on?T.accent:isT?"rgba(232,93,32,.08)":"white",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",minWidth:56}}>
+                    <span style={{fontSize:10,fontWeight:700,color:on?"white":isT?T.accent:T.muted,textTransform:"uppercase"}}>{WEEKDAYS[dd.getDay()]}</span>
+                    <span style={{fontSize:22,fontWeight:800,color:on?"white":isT?T.accent:T.text,lineHeight:1}}>{dd.getDate()}</span>
+                    {cnt>0&&<span style={{fontSize:9,fontWeight:700,color:on?"rgba(255,255,255,.8)":T.accent,background:on?"rgba(255,255,255,.2)":T.accentLight,borderRadius:10,padding:"1px 6px"}}>{cnt}</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected day title */}
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:700,marginBottom:12,color:T.text}}>
+              {isToday?"Hoje, ":""}{d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}
+            </div>
+
+            {/* Slots list */}
+            {daySlots.length===0?(
+              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:32,textAlign:"center",color:T.muted}}>
+                <div style={{fontSize:28,marginBottom:8}}>📅</div>
+                <div style={{fontWeight:600}}>Nenhum agendamento</div>
+                <div style={{fontSize:13,marginTop:4}}>Toque em + para agendar</div>
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {daySlots.map(({hour,slots,blk})=>{
+                  if(blk) return(
+                    <div key={hour} style={{background:"#f0f0f0",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:13,fontWeight:700,color:T.muted,width:44}}>{hour}</span>
+                      <span style={{fontSize:13,color:"#94a3b8"}}>🔒 Horário bloqueado</span>
+                    </div>
+                  );
+                  return slots.map(slot=>{
+                    const lead=leads.find(l=>l.id===slot.lead_id)||allLeadsMap[slot.lead_id];
+                    const isExp=slot.tipo==="experimental";
+                    const bgColor=isExp?"#10b981":slot.status==="confirmado"?T.accent:T.gold;
+                    return(
+                      <div key={slot.id} onClick={()=>{if(lead&&onSelectLead)onSelectLead(leads.find(l=>l.id===slot.lead_id)||allLeadsMap[slot.lead_id]);else setSelectedSlotLead(slot);}}
+                        style={{background:"white",border:`1.5px solid ${bgColor}44`,borderRadius:12,padding:"14px 16px",borderLeft:`4px solid ${bgColor}`,cursor:"pointer"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                          <div>
+                            <div style={{fontWeight:700,fontSize:16,color:T.text}}>{lead?.name||"—"}</div>
+                            <div style={{fontSize:13,color:T.muted,marginTop:2}}>{lead?.course||"—"}</div>
+                          </div>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontWeight:700,color:bgColor,fontSize:15}}>{hour}</div>
+                            <div style={{fontSize:11,color:T.muted}}>30 min</div>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                          <span style={{fontSize:11,fontWeight:700,color:bgColor,background:bgColor+"18",borderRadius:20,padding:"3px 10px"}}>{isExp?"🧪 Experimental":"📅 Reunião"}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:slot.status==="confirmado"?"#10b981":T.gold,background:slot.status==="confirmado"?"#f0fdf4":"#fefce8",borderRadius:20,padding:"3px 10px"}}>{slot.status==="confirmado"?"✓ Confirmado":"⏳ Agendado"}</span>
+                          {(()=>{const u=UNITS.find(x=>x.id===lead?.unit);return u?<span style={{fontSize:11,fontWeight:700,color:u.text,background:u.color,border:`1px solid ${u.border}`,borderRadius:20,padding:"3px 10px"}}>{u.label}</span>:null;})()}
+                        </div>
+                        {slot.status==="agendado"&&<div style={{display:"flex",gap:8,marginTop:10}}>
+                          <button onClick={e=>{e.stopPropagation();confirmarSlot(slot.id);}} className="tap"
+                            style={{flex:1,background:T.accent,color:"white",border:"none",borderRadius:9,padding:"10px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                            ✓ Confirmar
+                          </button>
+                          <button onClick={e=>{e.stopPropagation();cancelSlot(slot.id);}} className="tap"
+                            style={{background:"#fef2f2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                            ✕
+                          </button>
+                        </div>}
+                      </div>
+                    );
+                  });
+                })}
+              </div>
+            )}
+
+            {/* Add button */}
+            {!blockMode&&<button onClick={()=>setBookModal({date:mobDay,time:"09:00"})} className="tap"
+              style={{width:"100%",background:T.accent,color:"white",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:16,boxShadow:`0 4px 16px ${T.accent}44`}}>
+              + Agendar neste dia
+            </button>}
+          </div>
+        );
+      })()}
+
+      {/* Calendar grid - desktop only */}
+      {(!mob)&&loading&&<div style={{textAlign:"center",padding:40}}><Spinner/></div>}
+      {(!mob)&&!loading&&(
         <div style={{background:"#ffffff",border:"1px solid #e8e8e8",borderRadius:T.radius,overflow:"auto"}}>
           {/* Day headers */}
           <div style={{display:"grid",gridTemplateColumns:`64px repeat(${workDates.length},1fr)`,borderBottom:`1px solid ${T.border}`}}>
