@@ -573,6 +573,10 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
       if(bookForm.tipo==="reuniao"){
         await supabase.from("leads").update({stage:"reuniao"}).eq("id",bookForm.lead_id);
       }
+      // Save obs to lead history
+      const dateFormatadoHist=new Date(date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
+      const histNote=`${bookForm.tipo==="experimental"?"🧪 Aula Experimental":"📅 Reunião"} agendada para ${dateFormatadoHist} às ${time}${bookForm.notes?` — Obs: ${bookForm.notes}`:""}`;
+      await supabase.from("lead_history").insert({id:uid(),lead_id:bookForm.lead_id,type:"Reunião",note:histNote,date:new Date().toISOString()});
       await loadData();
       // Send WhatsApp notification to closer
       const lead=leads.find(l=>l.id===bookForm.lead_id);
