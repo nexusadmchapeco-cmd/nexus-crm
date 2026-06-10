@@ -505,12 +505,14 @@ function AddLeadModal({onAdd,onClose,mob}) {
 }
 
 /* ─── AGENDA GOOGLE STYLE ────────────────────────────────────────── */
-function AgendaCloser({leads,mob}) {
+function AgendaCloser({leads,mob,onSelectLead}) {
   const [weekBase,setWeekBase]=useState(today());
   const [slots,setSlots]=useState([]);
   const [blocked,setBlocked]=useState([]);
   const [loading,setLoading]=useState(true);
-  const [bookModal,setBookModal]=useState(null); // {date, time}
+  const [bookModal,setBookModal]=useState(null);
+  const [allLeadsMap,setAllLeadsMap]=useState({});
+  const [selectedSlotLead,setSelectedSlotLead]=useState(null); // {date, time}
   const [blockMode,setBlockMode]=useState(false);
   const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao"});
   const [saving,setSaving]=useState(false);
@@ -519,6 +521,14 @@ function AgendaCloser({leads,mob}) {
   const workDates=getWeekDates(weekBase); // Mon(0)..Sat(5)
 
   useEffect(()=>{ loadData(); },[weekBase]);
+  useEffect(()=>{
+    (async()=>{
+      const{data}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
+      const map={};
+      (data||[]).forEach(l=>{ map[l.id]=l; });
+      setAllLeadsMap(map);
+    })();
+  },[]);
 
   const loadData=async()=>{
     setLoading(true);
@@ -635,7 +645,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
         <div style={{background:T.accentLight,border:"1.5px solid rgba(232,93,32,.3)",borderRadius:T.radius,padding:"12px 16px",marginBottom:16}}>
           <div style={{fontWeight:700,fontSize:14,color:T.accent,marginBottom:8}}>🔴 Hoje — {todaySlots.length} reunião(ões)</div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {todaySlots.map(s=>{const lead=leads.find(l=>l.id===s.lead_id);return(
+            {todaySlots.map(s=>{const lead=leads.find(l=>l.id===s.lead_id)||allLeadsMap[s.lead_id];return(
               <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
                 <span style={{fontWeight:700,color:s.tipo==="experimental"?"#10b981":T.accent}}>{s.tipo==="experimental"?"🧪":"📅"} {s.time}–{addMinutes(s.time,30)}</span>
                 <span style={{fontWeight:600}}>{lead?.name||"—"}</span>
@@ -688,7 +698,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
               {workDates.map(date=>{
                 const slotsAt=getSlotsAt(date,hour);const slot=slotsAt[0];
                 const blk=isBlocked(date,hour);
-                const lead=slot?leads.find(l=>l.id===slot.lead_id):null;
+                const lead=slot?(leads.find(l=>l.id===slot.lead_id)||allLeadsMap[slot.lead_id]):null;
                 const isPast=date<ts||(date===ts&&hour<new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
                 return (
                   <div key={date}
@@ -706,9 +716,10 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
                     }}>
                     {blk&&<div style={{fontSize:11,color:"#94a3b8",fontWeight:600,padding:"4px 2px",textAlign:"center"}}>🔒</div>}
                     {slot&&(
-                      <div style={{fontSize:11,background:slot.tipo==="experimental"?"#10b981":statusColor[slot.status]||T.accent,color:"white",borderRadius:6,padding:"4px 6px",lineHeight:1.3}}>
-                        <div style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead?.name||"Lead"}</div>
-                        <div style={{opacity:.85,fontSize:10}}>{hour}–{addMinutes(hour,30)}</div>
+                      <div onClick={e=>{e.stopPropagation();if(lead&&onSelectLead)onSelectLead(leads.find(l=>l.id===slot.lead_id)||allLeadsMap[slot.lead_id]);else setSelectedSlotLead(slot);}}
+                        style={{fontSize:11,background:slot.tipo==="experimental"?"#10b981":statusColor[slot.status]||T.accent,color:"white",borderRadius:6,padding:"4px 6px",lineHeight:1.3,cursor:"pointer"}}>
+                        <div style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lead?.name||"—"}</div>
+                        <div style={{opacity:.85,fontSize:10}}>{lead?.course||""} {hour}–{addMinutes(hour,30)}</div>
                         <div style={{display:"flex",gap:4,marginTop:4}}>
                           {slot.status==="agendado"&&<>
                             <button onClick={e=>{e.stopPropagation();confirmarSlot(slot.id);}} className="tap" style={{background:"rgba(255,255,255,.25)",border:"none",borderRadius:4,padding:"2px 5px",fontSize:10,fontWeight:700,cursor:"pointer",color:"white"}}>✓</button>
@@ -727,6 +738,44 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
       )}
 
       {/* Book modal */}
+      {selectedSlotLead&&(
+        <div onClick={e=>e.target===e.currentTarget&&setSelectedSlotLead(null)}
+          style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:20,backdropFilter:"blur(4px)"}}>
+          <div style={{background:"white",borderRadius:16,padding:"24px",width:"100%",maxWidth:360,boxShadow:"0 8px 40px rgba(0,0,0,.2)",animation:"fadeUp .2s"}}>
+            {(()=>{const sl=allLeadsMap[selectedSlotLead.lead_id];const unit=UNITS.find(u=>u.id===sl?.unit);const st=STAGES.find(s=>s.id===sl?.stage);return(<>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+                <div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700}}>{sl?.name||"—"}</div>
+                  <div style={{fontSize:13,color:T.muted,marginTop:2}}>{sl?.course||"—"}</div>
+                </div>
+                <button onClick={()=>setSelectedSlotLead(null)} style={{background:T.bg,border:"none",borderRadius:8,width:32,height:32,fontSize:18,cursor:"pointer",color:T.muted}}>×</button>
+              </div>
+              <div style={{display:"grid",gap:8,marginBottom:16}}>
+                {[["📱 Telefone",sl?.phone||"—"],["📚 Curso",sl?.course||"—"],["🏫 Unidade",unit?.label||"—"],["📊 Etapa",st?.label||"—"],
+                  ["📅 Tipo",selectedSlotLead.tipo==="experimental"?"🧪 Aula Experimental":"📅 Reunião"],
+                  ["⏰ Horário",`${selectedSlotLead.time} – ${addMinutes(selectedSlotLead.time,30)}`],
+                  ["📌 Status",selectedSlotLead.status]
+                ].map(([l,v])=>(
+                  <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"6px 0",borderBottom:`1px solid ${T.border}`}}>
+                    <span style={{color:T.muted}}>{l}</span>
+                    <span style={{fontWeight:600}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {selectedSlotLead.status==="agendado"&&<>
+                  <Btn variant="primary" onClick={()=>{confirmarSlot(selectedSlotLead.id);setSelectedSlotLead(null);}} full>✓ Confirmar</Btn>
+                  <Btn variant="danger" onClick={()=>{cancelSlot(selectedSlotLead.id);setSelectedSlotLead(null);}}>✕</Btn>
+                </>}
+                {sl?.phone&&<button onClick={()=>window.open(`https://wa.me/55${sl.phone.replace(/\D/g,"")}`, "_blank")} className="tap"
+                  style={{background:"#25d366",color:"white",border:"none",borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  📱 WhatsApp
+                </button>}
+              </div>
+            </>);})()} 
+          </div>
+        </div>
+      )}
       {bookModal&&(
         <Modal title={`Agendar Reunião`} subtitle={`${new Date(bookModal.date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})} · ${bookModal.time} – ${addMinutes(bookModal.time,30)} (30 min)`} onClose={()=>setBookModal(null)} mob={mob} width={460}>
           <div style={{display:"grid",gap:13}}>
@@ -2446,7 +2495,7 @@ export default function App() {
     <>
       <GlobalStyles/>
       <div style={{display:"flex",minHeight:"100vh"}}>
-        {!mob&&<Sidebar active={page} onChange={nav} fuCount={fuCount} waUnread={waUnreadTotal} cadLate={cadLateTotal} onLogout={logout} userEmail={session.user.email}/>}
+        {!mob&&<Sidebar active={page} onChange={nav} fuCount={fuCount} waUnread={waUnreadTotal} cadLate={cadLateTotal} onLogout={logout} userEmail={session.user.email} userProfile={userProfile}/>}
         <main style={{flex:1,padding:mob?"18px 16px 90px":"36px 40px",overflowY:"auto",minHeight:"100vh"}}>
           {mob&&(
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
@@ -2469,7 +2518,7 @@ export default function App() {
             <>
               {page==="pipeline"   &&<KanbanBoard leads={leads} onSelect={setSelected} onMove={moveLead} onQuickAdd={()=>setShowQuick(true)} mob={mob}/>}
               {page==="whatsapp"   &&<WhatsAppInbox leads={leads} mob={mob} onSelectLead={l=>{setSelected(l);}}/>}
-              {page==="agenda"     &&<AgendaCloser leads={leads} mob={mob}/>}
+              {page==="agenda"     &&<AgendaCloser leads={leads} mob={mob} onSelectLead={l=>{if(l&&leads.find(x=>x.id===l.id))setSelected(l);}}/>}
               {page==="dashboard"  &&<Dashboard leads={leads} mob={mob}/>}
               {page==="leads"      &&<LeadsList leads={leads} onSelect={setSelected} onAdd={()=>setShowAdd(true)} mob={mob}/>}
               {page==="followups"  &&<FollowUps leads={leads} onSelect={setSelected} mob={mob}/>}
