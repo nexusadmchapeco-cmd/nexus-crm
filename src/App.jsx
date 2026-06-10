@@ -505,7 +505,7 @@ function AddLeadModal({onAdd,onClose,mob}) {
 }
 
 /* ─── AGENDA GOOGLE STYLE ────────────────────────────────────────── */
-function AgendaCloser({leads,mob,onSelectLead}) {
+function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const [weekBase,setWeekBase]=useState(today());
   const [slots,setSlots]=useState([]);
   const [blocked,setBlocked]=useState([]);
@@ -617,7 +617,9 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
 
   const ts=today();
   const todaySlots=slots.filter(s=>s.date===ts&&s.status!=="cancelado").sort((a,b)=>a.time.localeCompare(b.time));
-  const availLeads=leads.filter(l=>l.stage==="reuniao");
+  const allowedUnitsAgenda=(userProfile?.units)||["pf","chape","online"];
+  const isAdminAgenda=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
+  const availLeads=leads.filter(l=>l.stage==="reuniao"&&(isAdminAgenda||!l.unit||allowedUnitsAgenda.includes(l.unit)));
 
   const statusColor={agendado:T.gold,confirmado:T.accent,cancelado:"#dc2626"};
   const tipoColor=(slot)=>slot?.tipo==="experimental"?"#10b981":T.accent;
@@ -2518,7 +2520,7 @@ export default function App() {
             <>
               {page==="pipeline"   &&<KanbanBoard leads={leads} onSelect={setSelected} onMove={moveLead} onQuickAdd={()=>setShowQuick(true)} mob={mob}/>}
               {page==="whatsapp"   &&<WhatsAppInbox leads={leads} mob={mob} onSelectLead={l=>{setSelected(l);}}/>}
-              {page==="agenda"     &&<AgendaCloser leads={leads} mob={mob} onSelectLead={l=>{if(l&&leads.find(x=>x.id===l.id))setSelected(l);}}/>}
+              {page==="agenda"     &&<AgendaCloser leads={leads} mob={mob} onSelectLead={l=>{if(l&&leads.find(x=>x.id===l.id))setSelected(l);}} userProfile={userProfile}/>}
               {page==="dashboard"  &&<Dashboard leads={leads} mob={mob}/>}
               {page==="leads"      &&<LeadsList leads={leads} onSelect={setSelected} onAdd={()=>setShowAdd(true)} mob={mob}/>}
               {page==="followups"  &&<FollowUps leads={leads} onSelect={setSelected} mob={mob}/>}
