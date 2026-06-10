@@ -525,10 +525,14 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     (async()=>{
       const{data}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
       const map={};
-      (data||[]).forEach(l=>{ map[l.id]=l; });
+      const allowedU=(userProfile?.units)||["pf","chape","online"];
+      const isAdm=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
+      (data||[]).forEach(l=>{
+        if(isAdm||!l.unit||allowedU.includes(l.unit)) map[l.id]=l;
+      });
       setAllLeadsMap(map);
     })();
-  },[]);
+  },[userProfile]);
 
   const loadData=async()=>{
     setLoading(true);
@@ -537,11 +541,19 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
       supabase.from("agenda").select("*").gte("date",startD).lte("date",endD).neq("status","cancelado"),
       supabase.from("agenda_blocked").select("*").gte("date",startD).lte("date",endD)
     ]);
+    // Filter slots to only show leads in allowed units (resolved after allLeadsMap loads)
     setSlots(s||[]);setBlocked(b||[]);setLoading(false);
   };
 
   const isBlocked=(date,time)=>blocked.some(b=>b.date===date&&b.time===time);
-  const getSlotsAt=(date,time)=>slots.filter(s=>s.date===date&&s.time===time);
+  const getSlotsAt=(date,time)=>slots.filter(s=>{
+    if(s.date!==date||s.time!==time)return false;
+    // Only show slot if lead is in allowed units
+    if(!s.lead_id)return true;
+    const l=allLeadsMap[s.lead_id];
+    if(!l)return false; // lead not in allowed map = not visible
+    return true;
+  });
 
   const toggleBlock=async(date,time)=>{
     if(isBlocked(date,time)){
@@ -616,7 +628,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
   const goToday=()=>setWeekBase(today());
 
   const ts=today();
-  const todaySlots=slots.filter(s=>s.date===ts&&s.status!=="cancelado").sort((a,b)=>a.time.localeCompare(b.time));
+  const todaySlots=slots.filter(s=>s.date===ts&&s.status!=="cancelado"&&(!s.lead_id||allLeadsMap[s.lead_id])).sort((a,b)=>a.time.localeCompare(b.time));
   const allowedUnitsAgenda=(userProfile?.units)||["pf","chape","online"];
   const isAdminAgenda=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
   const availLeads=leads.filter(l=>l.stage==="reuniao"&&(isAdminAgenda||!l.unit||allowedUnitsAgenda.includes(l.unit)));
