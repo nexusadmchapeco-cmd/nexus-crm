@@ -814,7 +814,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
                 const slotsAt=getSlotsAt(date,hour);const slot=slotsAt[0];
                 const blk=isBlocked(date,hour);
                 const lead=slot?(leads.find(l=>l.id===slot.lead_id)||allLeadsMap[slot.lead_id]):null;
-                const isPast=date<ts||(date===ts&&hour<new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+                const nowH2=new Date();const nowTime2=String(nowH2.getHours()).padStart(2,"0")+":"+String(nowH2.getMinutes()).padStart(2,"0");const isPast=date<ts||(date===ts&&hour<nowTime2);
                 return (
                   <div key={date}
                     onClick={()=>{
@@ -1081,7 +1081,6 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   };
   const filteredLeads=leads.filter(l=>{
     const s=(search||"").toLowerCase().trim();
-    if(s&&l===leads[0])console.log("filter running, s=",s,"name=",l.name,"match=",(l.name||"").toLowerCase().includes(s));
     const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
@@ -2553,6 +2552,7 @@ export default function App() {
 
   useEffect(()=>{
     if(!session)return;
+    let cancelled=false;
     setDbLoading(true);
     (async()=>{
       // Load user profile first
@@ -2567,6 +2567,7 @@ export default function App() {
       const allowedUnits=(profile?.units)||["pf","chape","online"];
       const isAdmin=(profile?.role)==="admin";
       const filteredLd=(ld||[]).filter(l=>isAdmin||!l.unit||allowedUnits.includes(l.unit));
+      if(cancelled)return;
       setLeads(filteredLd.map(l=>({
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
         stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,matriculaMes:l.matricula_mes||null,valorMatricula:l.valor_matricula||l.valor_mensalidade||null,tipoVenda:l.tipo_venda||null,
@@ -2576,12 +2577,13 @@ export default function App() {
       })));
       setDbLoading(false);
     })();
+    return()=>{cancelled=true;};
   },[session]);
 
   const updateLead=u=>{setLeads(p=>p.map(l=>l.id===u.id?u:l));setSelected(u);};
-  const addLead=d=>setLeads(p=>[d,...p]);
+  const addLead=d=>setLeads(p=>p.find(l=>l.id===d.id)?p:[d,...p]);
   const deleteLead=id=>{setLeads(p=>p.filter(l=>l.id!==id));setSelected(null);};
-  const moveLead=async(lid,sid)=>{await supabase.from("leads").update({stage:sid}).eq("id",lid);setLeads(p=>p.map(l=>l.id===lid?{...l,stage:sid}:l));};
+  const moveLead=async(lid,sid)=>{await supabase.from("leads").update({stage:sid}).eq("id",lid);setLeads(p=>{const exists=p.find(l=>l.id===lid);if(!exists)return p;return p.map(l=>l.id===lid?{...l,stage:sid}:l);});};
   const nav=p=>{setPage(p);setSelected(null);};
   const isAdmin=userProfile?.role==="admin";
   const isSdr=userProfile?.role==="sdr";
