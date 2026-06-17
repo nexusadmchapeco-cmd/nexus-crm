@@ -2550,8 +2550,12 @@ export default function App() {
   },[]);
 
 
+  const loadedRef = useRef(false);
   useEffect(()=>{
     if(!session)return;
+    // Prevent double load from onAuthStateChange firing on token refresh
+    if(loadedRef.current && leads.length > 0) return;
+    loadedRef.current = true;
     let cancelled=false;
     setDbLoading(true);
     (async()=>{
@@ -2590,7 +2594,7 @@ export default function App() {
   const isCloserPF=userProfile?.role==="closer_pf";
   const isCloserChape=userProfile?.role==="closer_chape";
   const isCloser=isCloserPF||isCloserChape;
-  const logout=()=>supabase.auth.signOut();
+  const logout=()=>{loadedRef.current=false;setLeads([]);supabase.auth.signOut();};
   const ts=today();
   const fuCount=leads.filter(l=>l.followUp?.date&&l.followUp.date<=ts).length;
   const waUnreadTotal=leads.reduce((sum,l)=>sum+(l.unreadCount||0),0);
