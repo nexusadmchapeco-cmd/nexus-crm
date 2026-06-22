@@ -56,6 +56,7 @@ const NAV_ITEMS = [
   { id:"leads",      icon:"◎", label:"Leads"     },
   { id:"followups",  icon:"◷", label:"Follow-up" },
   { id:"relatorios", icon:"◈", label:"Relatórios"},
+  { id:"propostas",  icon:"📋", label:"Propostas"  },
   { id:"ia",         icon:"🤖", label:"Agente IA" },
 ];
 
@@ -2597,6 +2598,249 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   );
 }
 
+/* ─── PROPOSTAS ──────────────────────────────────────────────────── */
+const NIVEIS_PROP=[
+  {label:"Starter",sub:"Básico",      meses:2,desc:"Vocabulário e primeiras frases.",cor:"#333"},
+  {label:"A1",     sub:"Elementar",   meses:4,desc:"Frases do dia a dia.",cor:"#333"},
+  {label:"A2",     sub:"Pré-inter.",  meses:3,desc:"Começa a destravar a fala.",cor:"#e85d20"},
+  {label:"B1",     sub:"Intermediário",meses:7,desc:"100% em inglês. Uso real.",cor:"#7a2d0c"},
+];
+const FEATURES_PROP=[
+  {title:"Aulas interativas e focadas em conversação",sub:"Aprenda falando, desde o primeiro dia."},
+  {title:"Turmas reduzidas",sub:"No máximo 6 alunos — mais tempo de fala."},
+  {title:"Plataforma de estudos online",sub:"Pratique em casa, no seu ritmo."},
+  {title:"Professor Nex (IA no WhatsApp)",sub:"Tire dúvidas e pratique a qualquer hora."},
+];
+const MESES_NOMES_P=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+function Propostas({leads,mob}) {
+  const negLeads=leads.filter(l=>l.stage==="negociacao");
+  const [tipo,setTipo]=useState("individual");
+  const [leadSel,setLeadSel]=useState(null);
+  const [moduloIdx,setModuloIdx]=useState(0);
+  const [form,setForm]=useState({mes:"",matr:"",material:"",parcela:"",data1parcela:"",pgto:"Cartão recorrente",obs:"",filho:"",resp:""});
+  const [gerado,setGerado]=useState(false);
+  const canvasRef=useRef(null);
+  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+  const mesesOpts=Array.from({length:6},(_,i)=>{
+    const d=new Date(new Date().getFullYear(),new Date().getMonth()+i,1);
+    return `${MESES_NOMES_P[d.getMonth()]} ${d.getFullYear()}`;
+  });
+
+  const fmtData=(val)=>{if(!val)return"";const[y,m,d]=val.split("-");return`${d}/${m}/${y}`;};
+
+  const gerar=()=>{
+    const canvas=canvasRef.current; if(!canvas)return;
+    const SCALE=3,W=600;
+    const nome=(leadSel?.name)||"Aluno";
+    const unidade=leadSel?UNITS.find(u=>u.id===leadSel.unit)?.label||"Nexus":form.unidade||"Nexus";
+    const mes=form.mes||mesesOpts[0];
+    const matr=form.matr?`R$ ${form.matr}`:"—";
+    const parcela=form.parcela?`R$ ${form.parcela}`:"—";
+    const data1=fmtData(form.data1parcela);
+    const material=form.material?`R$ ${form.material}`:"—";
+    const obs=form.obs;
+    const nomeDisplay=tipo==="filho"&&form.filho?form.filho:nome;
+    const subtitulo=tipo==="filho"&&form.resp?`Responsável: ${form.resp}`:`Proposta personalizada · ${unidade}`;
+    const totalMeses=NIVEIS_PROP.slice(moduloIdx).reduce((s,n)=>s+n.meses,0);
+    const HDR=196,JORNADA=178,FEAT_H=158,VAL_H=data1?175:155,OBS_H=obs?56:0,FOOTER_H=48;
+    const H=HDR+JORNADA+FEAT_H+VAL_H+OBS_H+FOOTER_H;
+    canvas.width=W*SCALE; canvas.height=H*SCALE;
+    canvas.style.width=W+"px"; canvas.style.height=H+"px";
+    const ctx=canvas.getContext("2d"); ctx.scale(SCALE,SCALE);
+    const rr=(x,y,w,h,r,fill)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();if(fill!==undefined){ctx.fillStyle=fill;ctx.fill();}};
+    ctx.fillStyle="#111"; ctx.fillRect(0,0,W,HDR);
+    ctx.fillStyle="#e85d20"; ctx.globalAlpha=.85; ctx.beginPath(); ctx.arc(W-55,45,52,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#7a2d0c"; ctx.globalAlpha=.55; ctx.beginPath(); ctx.arc(W-38,108,36,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+    const logoImg=new Image();
+    logoImg.onload=()=>{const lh=30,lw=lh*(logoImg.width/logoImg.height);ctx.drawImage(logoImg,28,20,lw,lh);drawRest();};
+    logoImg.onerror=()=>{ctx.font="700 18px -apple-system,sans-serif";ctx.fillStyle="#fff";ctx.fillText("NEXUS",28,42);drawRest();};
+    logoImg.src="/logo.png";
+    function drawRest(){
+      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("PROPOSTA PERSONALIZADA PARA",28,74);
+      ctx.font=`700 ${nomeDisplay.length>18?26:32}px -apple-system,sans-serif`; ctx.fillStyle="#fff"; ctx.fillText(nomeDisplay,28,112);
+      ctx.font="400 12px -apple-system,sans-serif"; ctx.fillStyle="#999"; ctx.fillText(subtitulo,28,134);
+      rr(28,148,148,30,6,"#e85d20"); ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(`Início: ${mes}`,40,167);
+      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#666"; ctx.textAlign="right"; ctx.fillText(unidade,W-28,167); ctx.textAlign="left";
+      let y=HDR;
+      ctx.fillStyle="#f5f5f5"; ctx.fillRect(0,y,W,JORNADA);
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("A JORNADA NO CURSO",28,y+20);
+      const cw=(W-56-18)/4,ch=JORNADA-52;
+      NIVEIS_PROP.forEach((n,i)=>{
+        const isPast=i<moduloIdx,isStart=i===moduloIdx;
+        const cx=28+i*(cw+6),cy=y+28;
+        const bg=isPast?"#e0e0e0":isStart?"#e85d20":i===3?"#7a2d0c":"#222";
+        rr(cx,cy,cw,ch,8,bg);
+        ctx.font="700 12px -apple-system,sans-serif"; ctx.fillStyle=isPast?"#999":"#fff"; ctx.fillText(n.label,cx+10,cy+18);
+        ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle=isPast?"#bbb":isStart?"rgba(255,255,255,.9)":"#e85d20"; ctx.fillText(`${n.meses} meses`,cx+10,cy+31);
+        if(isStart){rr(cx+cw-50,cy+4,46,14,4,"rgba(255,255,255,.2)");ctx.font="500 8px -apple-system,sans-serif";ctx.fillStyle="#fff";ctx.textAlign="center";ctx.fillText("INÍCIO AQUI",cx+cw-27,cy+13);ctx.textAlign="left";}
+        if(!isPast&&ch>55){ctx.font="400 9px -apple-system,sans-serif";ctx.fillStyle=isStart?"rgba(255,255,255,.75)":"rgba(255,255,255,.6)";const words=n.desc.split(" ");let line="",ly=cy+46;words.forEach(w=>{const t=line+w+" ";if(ctx.measureText(t).width>cw-14&&line){ctx.fillText(line.trim(),cx+10,ly);ly+=12;line=w+" ";}else line=t;});if(line)ctx.fillText(line.trim(),cx+10,ly);}
+        if(isPast){ctx.strokeStyle="#bbb";ctx.lineWidth=1.2;ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(cx+6,cy+ch/2);ctx.lineTo(cx+cw-6,cy+ch/2);ctx.stroke();ctx.globalAlpha=1;}
+      });
+      const durStr=`Duração total: ${totalMeses} meses`;
+      ctx.font="500 10px -apple-system,sans-serif";
+      const durW=ctx.measureText(durStr).width+20;
+      rr(W-28-durW,y+JORNADA-24,durW,16,5,"#111"); ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.fillText(durStr,W-28-durW/2,y+JORNADA-13); ctx.textAlign="left";
+      y+=JORNADA;
+      ctx.fillStyle="#fff"; ctx.fillRect(0,y,W,FEAT_H);
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("O QUE ESTÁ INCLUÍDO",28,y+20);
+      const fw=(W-56-10)/2,fh=52;
+      FEATURES_PROP.forEach((ft,i)=>{const fx=28+(i%2)*(fw+10),fy=y+28+Math.floor(i/2)*(fh+6);rr(fx,fy,fw,fh,8,"#f7f7f7");ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle="#111";ctx.fillText(ft.title,fx+12,fy+18);ctx.font="400 10px -apple-system,sans-serif";ctx.fillStyle="#888";ctx.fillText(ft.sub,fx+12,fy+32);});
+      y+=FEAT_H;
+      ctx.fillStyle="#1a1a1a"; ctx.fillRect(0,y,W,VAL_H);
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("CONDIÇÃO ESPECIAL",28,y+22);
+      const vbW=W/2-34;
+      rr(28,y+30,vbW,VAL_H-46,10,"#e85d20"); ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.7)"; ctx.fillText("MATRÍCULA",40,y+48); ctx.font="700 30px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(matr,40,y+84); ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillText(`Material: ${material}`,40,y+104);
+      const vx=W/2+6;
+      rr(vx,y+30,vbW,VAL_H-46,10,"#2a2a2a"); ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText("MENSALIDADE",vx+12,y+48); ctx.font="700 30px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(parcela,vx+12,y+84); ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText(form.pgto,vx+12,y+104);
+      if(data1){rr(vx+12,y+116,vbW-24,18,5,"#333");ctx.font="500 10px -apple-system,sans-serif";ctx.fillStyle="#e85d20";ctx.textAlign="center";ctx.fillText(`1ª parcela: ${data1}`,vx+12+(vbW-24)/2,y+128);ctx.textAlign="left";}
+      y+=VAL_H;
+      if(obs){ctx.fillStyle="#fff8f5";ctx.fillRect(0,y,W,OBS_H);ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle="#c44a15";ctx.fillText("★  "+obs,28,y+OBS_H/2+5);y+=OBS_H;}
+      ctx.fillStyle="#e85d20"; ctx.fillRect(0,y,W,FOOTER_H);
+      ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText("Nexus English Center  ·  Proposta personalizada",28,y+FOOTER_H/2+4);
+      ctx.font="500 11px -apple-system,sans-serif"; ctx.textAlign="right"; ctx.fillText("Inglês que você usa de verdade",W-28,y+FOOTER_H/2+4); ctx.textAlign="left";
+      setGerado(true);
+    }
+  };
+
+  const baixar=()=>{
+    const canvas=canvasRef.current; if(!canvas)return;
+    const a=document.createElement("a");
+    a.download=`proposta_nexus_${(leadSel?.name||"lead").replace(/\s+/g,"_")}.png`;
+    a.href=canvas.toDataURL("image/png"); a.click();
+  };
+
+  const compartilhar=async()=>{
+    const canvas=canvasRef.current; if(!canvas)return;
+    canvas.toBlob(async blob=>{
+      const file=new File([blob],"proposta.png",{type:"image/png"});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:"Proposta Nexus"});
+      } else {baixar();}
+    },"image/png");
+  };
+
+  const iStyle={width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"10px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  const lStyle={display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5};
+
+  return (
+    <div style={{animation:"fadeUp .3s"}}>
+      <div style={{marginBottom:20}}>
+        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:700,letterSpacing:"-.5px"}}>Propostas</h1>
+        <p style={{color:T.muted,fontSize:13,marginTop:4}}>Gere propostas personalizadas em PNG para enviar pelo WhatsApp</p>
+      </div>
+
+      <div style={{display:mob?"flex":"grid",gridTemplateColumns:"380px 1fr",flexDirection:"column",gap:16,alignItems:"flex-start"}}>
+        {/* Formulário */}
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:20,display:"grid",gap:14}}>
+
+          {/* Tipo */}
+          <div>
+            <span style={lStyle}>Tipo de proposta</span>
+            <div style={{display:"flex",gap:8}}>
+              {[["individual","Individual"],["filho","Para filho/filha"]].map(([id,lbl])=>(
+                <button key={id} type="button" onClick={()=>setTipo(id)} className="tap"
+                  style={{flex:1,background:tipo===id?T.accent:"transparent",color:tipo===id?"white":T.muted,border:`1.5px solid ${tipo===id?T.accent:T.border}`,borderRadius:10,padding:"9px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Lead */}
+          <div>
+            <span style={lStyle}>Lead em negociação</span>
+            <select style={{...iStyle,cursor:"pointer"}} value={leadSel?.id||""} onChange={e=>{const l=negLeads.find(x=>x.id===e.target.value);setLeadSel(l||null);setGerado(false);}}>
+              <option value="">Selecione o lead...</option>
+              {negLeads.map(l=>{const u=UNITS.find(x=>x.id===l.unit);return(<option key={l.id} value={l.id}>{l.name}{u?` — ${u.label}`:""}</option>);})}
+            </select>
+            {leadSel&&(
+              <div style={{marginTop:8,background:T.accentLight,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.accent,fontWeight:600}}>
+                {leadSel.name} · {UNITS.find(u=>u.id===leadSel.unit)?.label||"Sem unidade"} · {leadSel.course||"Sem curso"}
+              </div>
+            )}
+          </div>
+
+          {/* Filho */}
+          {tipo==="filho"&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <label style={{display:"block"}}><span style={lStyle}>Nome do filho/filha</span><input style={iStyle} value={form.filho} onChange={e=>ff("filho",e.target.value)} placeholder="Ex: Pedro Silva" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+              <label style={{display:"block"}}><span style={lStyle}>Responsável</span><input style={iStyle} value={form.resp} onChange={e=>ff("resp",e.target.value)} placeholder="Ex: Maria Silva" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+            </div>
+          )}
+
+          {/* Mês + Módulo */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <label style={{display:"block"}}>
+              <span style={lStyle}>Mês de início</span>
+              <select style={{...iStyle,cursor:"pointer"}} value={form.mes} onChange={e=>ff("mes",e.target.value)}>
+                {mesesOpts.map(m=><option key={m}>{m}</option>)}
+              </select>
+            </label>
+            <div>
+              <span style={lStyle}>Módulo de início</span>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:2}}>
+                {NIVEIS_PROP.map((n,i)=>(
+                  <button key={n.label} type="button" onClick={()=>setModuloIdx(i)} className="tap"
+                    style={{padding:"6px 10px",fontSize:11,fontWeight:700,border:`1.5px solid ${moduloIdx===i?"#e85d20":T.border}`,borderRadius:8,background:moduloIdx===i?"#e85d20":"transparent",color:moduloIdx===i?"white":T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Valores */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <label style={{display:"block"}}><span style={lStyle}>Matrícula (R$)</span><input style={iStyle} value={form.matr} onChange={e=>ff("matr",e.target.value)} placeholder="350,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+            <label style={{display:"block"}}><span style={lStyle}>Material (R$)</span><input style={iStyle} value={form.material} onChange={e=>ff("material",e.target.value)} placeholder="120,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+            <label style={{display:"block"}}>
+              <span style={lStyle}>Pagamento</span>
+              <select style={{...iStyle,cursor:"pointer"}} value={form.pgto} onChange={e=>ff("pgto",e.target.value)}>
+                <option>Cartão recorrente</option>
+                <option>Boleto</option>
+              </select>
+            </label>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <label style={{display:"block"}}><span style={lStyle}>Valor da parcela (R$)</span><input style={iStyle} value={form.parcela} onChange={e=>ff("parcela",e.target.value)} placeholder="359,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+            <label style={{display:"block"}}><span style={lStyle}>Data da 1ª parcela</span><input type="date" style={iStyle} value={form.data1parcela} onChange={e=>ff("data1parcela",e.target.value)} onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+          </div>
+
+          <label style={{display:"block"}}>
+            <span style={lStyle}>Observação especial</span>
+            <textarea style={{...iStyle,resize:"vertical",minHeight:60}} value={form.obs} onChange={e=>ff("obs",e.target.value)} placeholder="Ex: Condição válida até sexta-feira..." onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+          </label>
+
+          <Btn onClick={()=>{gerar();}} full>📋 Gerar proposta</Btn>
+
+          {gerado&&(
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={baixar} full variant="ghost">⬇ Baixar PNG</Btn>
+              <Btn onClick={compartilhar} full>📤 Compartilhar</Btn>
+            </div>
+          )}
+        </div>
+
+        {/* Preview */}
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,overflow:"hidden",minHeight:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          {!gerado?(
+            <div style={{textAlign:"center",color:T.muted,padding:40}}>
+              <div style={{fontSize:40,marginBottom:12}}>📋</div>
+              <div style={{fontWeight:600,fontSize:15}}>Preencha os dados e gere a proposta</div>
+              <div style={{fontSize:13,marginTop:6}}>O PNG aparecerá aqui para download e compartilhamento</div>
+            </div>
+          ):null}
+          <canvas ref={canvasRef} style={{width:"100%",display:gerado?"block":"none"}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── AGENTE IA ──────────────────────────────────────────────────── */
 function AgenteIA({leads, mob}) {
   const [msgs, setMsgs] = useState([
@@ -2959,6 +3203,7 @@ export default function App() {
               {page==="leads"      &&<LeadsList leads={leads} onSelect={setSelected} onAdd={()=>setShowAdd(true)} mob={mob}/>}
               {page==="followups"  &&<FollowUps leads={leads} onSelect={setSelected} mob={mob}/>}
               {page==="relatorios" &&<Relatorios leads={leads} mob={mob}/>}
+              {page==="propostas"  &&<Propostas leads={leads} mob={mob}/>}
               {page==="ia"          &&<AgenteIA leads={leads} mob={mob}/>}
             </>
           )}
