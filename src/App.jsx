@@ -1910,7 +1910,9 @@ function OrcamentoTab({lead,mob}) {
   const gerar=()=>{
     const canvas=canvasRef.current;
     if(!canvas)return;
-    const W=560,PAD=32;
+    // Alta resolução: 3x para qualidade de impressão/WhatsApp
+    const SCALE=3;
+    const W=600,PAD=36;
     const linhas=[
       {label:"Nome",valor:lead.name||"—"},
       {label:"Módulo de início",valor:form.modulo||"—"},
@@ -1923,62 +1925,81 @@ function OrcamentoTab({lead,mob}) {
     ];
     if(form.obs)linhas.push({label:"Observações",valor:form.obs,multi:true});
 
-    const ROW_H=52,HEADER_H=100,FOOTER_H=48;
-    const obsLines=form.obs?Math.ceil(form.obs.length/52):0;
-    const obsExtra=obsLines>1?(obsLines-1)*18:0;
-    const H=HEADER_H+linhas.length*ROW_H+obsExtra+FOOTER_H+16;
-    canvas.width=W;canvas.height=H;
+    const ROW_H=58,HEADER_H=110,FOOTER_H=52;
+    const obsLines=form.obs?Math.ceil(form.obs.length/55):0;
+    const obsExtra=obsLines>1?(obsLines-1)*22:0;
+    const H=HEADER_H+linhas.length*ROW_H+obsExtra+FOOTER_H+20;
+
+    // Tamanho real do canvas multiplicado pela escala
+    canvas.width=W*SCALE;
+    canvas.height=H*SCALE;
+    // Tamanho visual (CSS) — mantém o layout normal
+    canvas.style.width=W+"px";
+    canvas.style.height=H+"px";
 
     const ctx=canvas.getContext("2d");
+    ctx.scale(SCALE,SCALE);
     ctx.fillStyle="#ffffff";ctx.fillRect(0,0,W,H);
 
     const img=new Image();
     img.onload=()=>{
       const ratio=img.width/img.height;
-      const logoH=52,logoW=logoH*ratio;
+      const logoH=56,logoW=logoH*ratio;
       ctx.drawImage(img,PAD,18,logoW,logoH);
 
-      ctx.font="400 12px system-ui,sans-serif";
-      ctx.fillStyle="#999";
+      ctx.font="400 13px -apple-system,system-ui,sans-serif";
+      ctx.fillStyle="#aaa";
       ctx.textAlign="right";
-      ctx.fillText("PROPOSTA COMERCIAL",W-PAD,42);
+      ctx.fillText("PROPOSTA COMERCIAL",W-PAD,44);
       const dt=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"});
-      ctx.fillText(dt,W-PAD,58);
+      ctx.fillText(dt,W-PAD,62);
       ctx.textAlign="left";
 
-      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,82,W-PAD*2,2);
+      // Linha separadora laranja
+      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,88,W-PAD*2,2.5);
 
-      let y=98;
+      let y=106;
       linhas.forEach((l,i)=>{
-        const obsH=l.multi?Math.max(ROW_H,ROW_H+(Math.ceil((l.valor||"").length/52)-1)*18):ROW_H;
-        if(i%2===0){ctx.fillStyle="#f8f8f8";ctx.fillRect(PAD-6,y-8,W-(PAD-6)*2,obsH);}
-        ctx.font="500 11px system-ui,sans-serif";ctx.fillStyle="#aaa";
-        ctx.fillText(l.label.toUpperCase(),PAD,y+8);
-        ctx.font="500 15px system-ui,sans-serif";ctx.fillStyle="#111";
-        if(l.multi&&(l.valor||"").length>52){
-          const words=(l.valor||"").split(" ");let line="",ly=y+26;
+        const obsH=l.multi?Math.max(ROW_H,ROW_H+(Math.ceil((l.valor||"").length/55)-1)*22):ROW_H;
+        // Fundo alternado
+        if(i%2===0){
+          ctx.fillStyle="#f7f7f7";
+          ctx.fillRect(PAD-8,y-10,W-(PAD-8)*2,obsH);
+        }
+        // Label
+        ctx.font="600 11px -apple-system,system-ui,sans-serif";
+        ctx.fillStyle="#bbb";
+        ctx.fillText(l.label.toUpperCase(),PAD,y+10);
+        // Valor
+        ctx.font="500 16px -apple-system,system-ui,sans-serif";
+        ctx.fillStyle="#111";
+        if(l.multi&&(l.valor||"").length>55){
+          const words=(l.valor||"").split(" ");let line="",ly=y+30;
           words.forEach(w=>{
             const test=line+w+" ";
-            ctx.font="400 14px system-ui,sans-serif";
-            if(ctx.measureText(test).width>W-PAD*2&&line){ctx.fillText(line.trim(),PAD,ly);ly+=18;line=w+" ";}
+            ctx.font="400 15px -apple-system,system-ui,sans-serif";
+            if(ctx.measureText(test).width>W-PAD*2&&line){ctx.fillText(line.trim(),PAD,ly);ly+=22;line=w+" ";}
             else line=test;
           });
           if(line)ctx.fillText(line.trim(),PAD,ly);
-        } else {ctx.fillText(l.valor||"—",PAD,y+26);}
+        } else {
+          ctx.fillText(l.valor||"—",PAD,y+30);
+        }
         y+=obsH;
       });
 
+      // Rodapé laranja
       ctx.fillStyle="#e85d20";ctx.fillRect(0,H-FOOTER_H,W,FOOTER_H);
-      ctx.font="400 12px system-ui,sans-serif";ctx.fillStyle="#fff";ctx.textAlign="center";
-      ctx.fillText("Nexus English Center · nexusenglishcenter.com.br",W/2,H-FOOTER_H+28);
+      ctx.font="400 13px -apple-system,system-ui,sans-serif";
+      ctx.fillStyle="#fff";ctx.textAlign="center";
+      ctx.fillText("Nexus English Center  ·  nexusenglishcenter.com.br",W/2,H-FOOTER_H+30);
       ctx.textAlign="left";
       setGerado(true);
     };
     img.onerror=()=>{
-      // fallback sem logo
-      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,82,W-PAD*2,2);
-      ctx.font="700 20px system-ui,sans-serif";ctx.fillStyle="#e85d20";
-      ctx.fillText("NEXUS ENGLISH CENTER",PAD,52);
+      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,88,W-PAD*2,2.5);
+      ctx.font="700 22px -apple-system,system-ui,sans-serif";ctx.fillStyle="#e85d20";
+      ctx.fillText("NEXUS ENGLISH CENTER",PAD,56);
       setGerado(true);
     };
     img.src="/logo.png";
