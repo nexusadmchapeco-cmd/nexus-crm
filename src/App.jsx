@@ -1081,7 +1081,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   };
   const filteredLeads=leads.filter(l=>{
     const s=(search||"").toLowerCase().trim();
-    const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
+    const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""))||(l.email||"").toLowerCase().includes(s)||(l.course||"").toLowerCase().includes(s);
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
   });
@@ -1213,7 +1213,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
                 onDragLeave={()=>setDragOver(null)}
-                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);const shouldCelebrate=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);if(shouldCelebrate)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
+                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);const shouldCelebrate=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);setSearch("");setFilterUnit("");if(shouldCelebrate)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
                 style={{minWidth:195,flex:"0 0 195px",background:over?stage.hex+"11":T.bg,border:`1.5px solid ${over?stage.hex:T.border}`,borderRadius:T.radius,padding:12,transition:"all .18s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
@@ -1264,7 +1264,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
                 onDragLeave={()=>setDragOver(null)}
-                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);if(stage.id==="matriculado"&&prev?.stage!=="matriculado"){setMatriculaPending({leadId:dragging.current,prevStage:prev?.stage});setDragOver(null);dragging.current=null;return;}const shouldCelebrateReun=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);if(shouldCelebrateReun)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
+                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);if(stage.id==="matriculado"&&prev?.stage!=="matriculado"){setMatriculaPending({leadId:dragging.current,prevStage:prev?.stage});setDragOver(null);dragging.current=null;return;}const shouldCelebrateReun=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);setSearch("");setFilterUnit("");if(shouldCelebrateReun)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
                 style={{minWidth:195,flex:"0 0 195px",background:over?stage.hex+"11":T.bg,border:`1.5px solid ${over?stage.hex:T.border}`,borderRadius:T.radius,padding:12,transition:"all .18s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
