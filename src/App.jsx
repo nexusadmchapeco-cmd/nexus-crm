@@ -1900,12 +1900,66 @@ function WhatsAppTab({lead, mob}) {
 }
 
 /* ─── ORÇAMENTO TAB ──────────────────────────────────────────────── */
+const NIVEIS_CURSO=[
+  {label:"Starter",sub:"Básico",       meses:2, cor:"#f0997b"},
+  {label:"A1",     sub:"Elementar",    meses:4, cor:"#D85A30"},
+  {label:"A2",     sub:"Pré-inter.",   meses:3, cor:"#c44a15"},
+  {label:"B1",     sub:"Intermediário",meses:7, cor:"#7a2d0c"},
+];
+
 function OrcamentoTab({lead,mob}) {
   const [pgto,setPgto]=useState("avista");
   const [form,setForm]=useState({modulo:"",duracao:"",matricula:"",material:"",total:"",parcela:"",formapgto:"Cartão recorrente",obs:""});
   const [gerado,setGerado]=useState(false);
+  const [inicioIdx,setInicioIdx]=useState(0);
   const canvasRef=useRef(null);
+  const escRef=useRef(null);
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+  useEffect(()=>{ drawEscada(); },[inicioIdx]);
+
+  const drawEscada=()=>{
+    const canvas=escRef.current; if(!canvas)return;
+    const SCALE=2;
+    const W=canvas.parentElement?.offsetWidth||480;
+    const H=240;
+    canvas.width=W*SCALE; canvas.height=H*SCALE;
+    canvas.style.width=W+"px"; canvas.style.height=H+"px";
+    const ctx=canvas.getContext("2d");
+    ctx.scale(SCALE,SCALE);
+    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
+    const N=NIVEIS_CURSO.length;
+    const PAD_L=16,PAD_R=16,PAD_B=36,PAD_T=36;
+    const areaW=W-PAD_L-PAD_R, areaH=H-PAD_T-PAD_B;
+    const stepW=areaW/N;
+    const rr=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();};
+    NIVEIS_CURSO.forEach((n,i)=>{
+      const isPast=i<inicioIdx, isInicio=i===inicioIdx;
+      const bH=((i+1)/N)*areaH;
+      const y=PAD_T+areaH-bH;
+      const x=PAD_L+i*stepW, bW=stepW-10, cx=x+stepW/2;
+      ctx.fillStyle=isPast?"#ececec":n.cor; ctx.globalAlpha=isPast?.45:1;
+      rr(x+5,y,bW,bH,6); ctx.fill(); ctx.globalAlpha=1;
+      if(isPast){ctx.strokeStyle="#c0c0c0";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(x+5,y+bH/2);ctx.lineTo(x+5+bW,y+bH/2);ctx.stroke();ctx.globalAlpha=1;}
+      ctx.textAlign="center";
+      ctx.font=`500 ${isInicio?14:12}px -apple-system,sans-serif`;
+      ctx.fillStyle=isPast?"#bbb":"#fff";
+      ctx.fillText(n.label,cx,y+22);
+      if(bH>50){ctx.font="400 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.75)";ctx.fillText(n.sub,cx,y+35);}
+      if(bH>70){ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.9)";ctx.fillText(`${n.meses} meses`,cx,y+bH-12);}
+      if(isInicio){
+        const bw2=72,bh2=18,bx=cx-bw2/2,by=y-28;
+        ctx.fillStyle="#e85d20"; rr(bx,by,bw2,bh2,4); ctx.fill();
+        ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#fff";
+        ctx.fillText("Início aqui",cx,by+13);
+        ctx.beginPath();ctx.moveTo(cx-4,by+bh2);ctx.lineTo(cx+4,by+bh2);ctx.lineTo(cx,by+bh2+6);ctx.closePath();ctx.fillStyle="#e85d20";ctx.fill();
+      }
+      ctx.font="500 11px -apple-system,sans-serif";
+      ctx.fillStyle=isInicio?"#e85d20":"#aaa";
+      ctx.fillText(n.label,cx,H-PAD_B+14);
+    });
+    ctx.strokeStyle="#e8e8e8";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(PAD_L,PAD_T+areaH+2);ctx.lineTo(W-PAD_R,PAD_T+areaH+2);ctx.stroke();
+  };
 
   const gerar=()=>{
     const canvas=canvasRef.current;
@@ -1928,7 +1982,8 @@ function OrcamentoTab({lead,mob}) {
     const ROW_H=58,HEADER_H=110,FOOTER_H=52;
     const obsLines=form.obs?Math.ceil(form.obs.length/55):0;
     const obsExtra=obsLines>1?(obsLines-1)*22:0;
-    const H=HEADER_H+linhas.length*ROW_H+obsExtra+FOOTER_H+20;
+    const ESC_H=200; // altura da escada no PNG
+    const H=HEADER_H+linhas.length*ROW_H+obsExtra+ESC_H+FOOTER_H+40;
 
     // Tamanho real do canvas multiplicado pela escala
     canvas.width=W*SCALE;
@@ -1940,6 +1995,9 @@ function OrcamentoTab({lead,mob}) {
     const ctx=canvas.getContext("2d");
     ctx.scale(SCALE,SCALE);
     ctx.fillStyle="#ffffff";ctx.fillRect(0,0,W,H);
+
+    // Função auxiliar roundRect
+    const rr=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();};
 
     const img=new Image();
     img.onload=()=>{
@@ -1961,32 +2019,56 @@ function OrcamentoTab({lead,mob}) {
       let y=106;
       linhas.forEach((l,i)=>{
         const obsH=l.multi?Math.max(ROW_H,ROW_H+(Math.ceil((l.valor||"").length/55)-1)*22):ROW_H;
-        // Fundo alternado
-        if(i%2===0){
-          ctx.fillStyle="#f7f7f7";
-          ctx.fillRect(PAD-8,y-10,W-(PAD-8)*2,obsH);
-        }
-        // Label
-        ctx.font="600 11px -apple-system,system-ui,sans-serif";
-        ctx.fillStyle="#bbb";
+        if(i%2===0){ctx.fillStyle="#f7f7f7";ctx.fillRect(PAD-8,y-10,W-(PAD-8)*2,obsH);}
+        ctx.font="600 11px -apple-system,system-ui,sans-serif";ctx.fillStyle="#bbb";
         ctx.fillText(l.label.toUpperCase(),PAD,y+10);
-        // Valor
-        ctx.font="500 16px -apple-system,system-ui,sans-serif";
-        ctx.fillStyle="#111";
+        ctx.font="500 16px -apple-system,system-ui,sans-serif";ctx.fillStyle="#111";
         if(l.multi&&(l.valor||"").length>55){
           const words=(l.valor||"").split(" ");let line="",ly=y+30;
-          words.forEach(w=>{
-            const test=line+w+" ";
-            ctx.font="400 15px -apple-system,system-ui,sans-serif";
-            if(ctx.measureText(test).width>W-PAD*2&&line){ctx.fillText(line.trim(),PAD,ly);ly+=22;line=w+" ";}
-            else line=test;
-          });
+          words.forEach(w=>{const test=line+w+" ";ctx.font="400 15px -apple-system,system-ui,sans-serif";if(ctx.measureText(test).width>W-PAD*2&&line){ctx.fillText(line.trim(),PAD,ly);ly+=22;line=w+" ";}else line=test;});
           if(line)ctx.fillText(line.trim(),PAD,ly);
-        } else {
-          ctx.fillText(l.valor||"—",PAD,y+30);
-        }
+        } else {ctx.fillText(l.valor||"—",PAD,y+30);}
         y+=obsH;
       });
+
+      // ── Escada de níveis ──────────────────────────────────────
+      const escY=y+16;
+      ctx.font="600 11px -apple-system,system-ui,sans-serif";
+      ctx.fillStyle="#bbb";ctx.textAlign="left";
+      ctx.fillText("TRILHA DO CURSO",PAD,escY);
+
+      const eTop=escY+12, eH=ESC_H-30, eW=W-PAD*2;
+      const N=NIVEIS_CURSO.length, stepW=eW/N;
+      const PAD_T2=28, PAD_B2=24, areaH2=eH-PAD_T2-PAD_B2;
+
+      NIVEIS_CURSO.forEach((n,i)=>{
+        const isPast=i<inicioIdx, isInicio=i===inicioIdx;
+        const bH=((i+1)/N)*areaH2;
+        const by=eTop+PAD_T2+areaH2-bH;
+        const bx=PAD+i*stepW, bW=stepW-8, cx=bx+stepW/2;
+        ctx.fillStyle=isPast?"#ececec":n.cor; ctx.globalAlpha=isPast?.4:1;
+        rr(bx+4,by,bW,bH,5); ctx.fill(); ctx.globalAlpha=1;
+        if(isPast){ctx.strokeStyle="#c0c0c0";ctx.lineWidth=1.2;ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(bx+4,by+bH/2);ctx.lineTo(bx+4+bW,by+bH/2);ctx.stroke();ctx.globalAlpha=1;}
+        ctx.textAlign="center";
+        ctx.font=`500 ${isInicio?13:11}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#bbb":"#fff";
+        ctx.fillText(n.label,cx,by+18);
+        if(bH>48){ctx.font="400 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.75)";ctx.fillText(n.sub,cx,by+30);}
+        if(bH>65){ctx.font="500 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.85)";ctx.fillText(`${n.meses}m`,cx,by+bH-10);}
+        if(isInicio){
+          const bw2=66,bh2=16,badgeX=cx-bw2/2,badgeY=by-24;
+          ctx.fillStyle="#e85d20"; rr(badgeX,badgeY,bw2,bh2,4); ctx.fill();
+          ctx.font="500 9px -apple-system,sans-serif"; ctx.fillStyle="#fff";
+          ctx.fillText("Início aqui",cx,badgeY+11);
+          ctx.beginPath();ctx.moveTo(cx-4,badgeY+bh2);ctx.lineTo(cx+4,badgeY+bh2);ctx.lineTo(cx,badgeY+bh2+5);ctx.closePath();ctx.fillStyle="#e85d20";ctx.fill();
+        }
+        ctx.font="500 10px -apple-system,sans-serif";
+        ctx.fillStyle=isInicio?"#e85d20":"#aaa";
+        ctx.fillText(n.label,cx,eTop+eH-4);
+      });
+      // linha chão
+      ctx.strokeStyle="#e8e8e8";ctx.lineWidth=1;ctx.beginPath();
+      ctx.moveTo(PAD,eTop+PAD_T2+areaH2+2);ctx.lineTo(W-PAD,eTop+PAD_T2+areaH2+2);ctx.stroke();
 
       // Rodapé laranja
       ctx.fillStyle="#e85d20";ctx.fillRect(0,H-FOOTER_H,W,FOOTER_H);
@@ -2087,6 +2169,35 @@ function OrcamentoTab({lead,mob}) {
         <span style={lStyle}>Observações importantes</span>
         <textarea style={{...iStyle,resize:"vertical",minHeight:64}} value={form.obs} onChange={e=>f("obs",e.target.value)} placeholder="Ex: Desconto válido até sexta-feira..." onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
       </label>
+
+      {/* Escada de níveis */}
+      <div>
+        <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Trilha do curso — ponto de início</span>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          {NIVEIS_CURSO.map((n,i)=>(
+            <button key={n.label} type="button" onClick={()=>setInicioIdx(i)} className="tap"
+              style={{padding:"5px 14px",fontSize:12,fontWeight:700,border:`1.5px solid ${inicioIdx===i?"#e85d20":T.border}`,borderRadius:20,background:inicioIdx===i?"#e85d20":"transparent",color:inicioIdx===i?"white":T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+              {n.label}
+            </button>
+          ))}
+        </div>
+        <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${T.border}`}}>
+          <canvas ref={escRef} style={{display:"block",width:"100%"}}/>
+          <div style={{background:"#f8f8f8",padding:"10px 14px",display:"flex",gap:16,flexWrap:"wrap",borderTop:`1px solid ${T.border}`}}>
+            {(()=>{
+              const restantes=NIVEIS_CURSO.slice(inicioIdx);
+              const totalMeses=restantes.reduce((s,n)=>s+n.meses,0);
+              const anos=Math.floor(totalMeses/12), mesesR=totalMeses%12;
+              const dur=anos>0?`${anos} ano${anos>1?"s":""} e ${mesesR} meses`:`${totalMeses} meses`;
+              return(<>
+                <div><div style={{fontSize:10,color:T.muted}}>Começa em</div><div style={{fontSize:14,fontWeight:700,color:"#e85d20"}}>{NIVEIS_CURSO[inicioIdx].label}</div></div>
+                <div style={{borderLeft:`1px solid ${T.border}`,paddingLeft:14}}><div style={{fontSize:10,color:T.muted}}>Duração total</div><div style={{fontSize:14,fontWeight:700,color:T.text}}>{dur}</div></div>
+                <div style={{borderLeft:`1px solid ${T.border}`,paddingLeft:14}}><div style={{fontSize:10,color:T.muted}}>Níveis</div><div style={{fontSize:14,fontWeight:700,color:T.text}}>{restantes.length} de {NIVEIS_CURSO.length}</div></div>
+              </>);
+            })()}
+          </div>
+        </div>
+      </div>
 
       <Btn onClick={gerar} full>📄 Gerar orçamento</Btn>
 
