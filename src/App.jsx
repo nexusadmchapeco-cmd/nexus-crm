@@ -431,7 +431,10 @@ function QuickAddModal({onAdd,onClose,mob}) {
     const id=uid();
     const{error}=await supabase.from("leads").insert({id,name:form.name,phone:form.phone,course:form.course||null,source:form.source||null,stage:"novo",responsavel:form.responsavel||null,unit:form.unit||null,created_at:new Date().toISOString()});
     if(!error){onAdd({id,name:form.name,phone:form.phone,course:form.course,source:form.source,stage:"novo",notes:"",responsavel:form.responsavel,unit:form.unit,createdAt:new Date().toISOString(),history:[],followUp:null});onClose();}
-    else alert("Erro ao salvar.");
+    else{
+      if(error.code==="23505")alert("⚠ Já existe um lead com este telefone cadastrado.");
+      else alert("Erro ao salvar: "+error.message);
+    }
     setSaving(false);
   };
   return (
@@ -589,7 +592,8 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     if(!bookForm.lead_id){alert("Selecione um lead.");return;}
     setSaving(true);
     const{date,time}=bookModal;
-    const chosenCloser=CLOSERS.find(c=>c.id===bookForm.closer_id)||CLOSERS.find(c=>c.unit===(leads.find(l=>l.id===bookForm.lead_id)?.unit))||CLOSERS[0];
+    const myCloserUnit=(userProfile?.units||[])[0]||null;
+    const chosenCloser=CLOSERS.find(c=>c.id===bookForm.closer_id)||CLOSERS.find(c=>c.unit===myCloserUnit)||CLOSERS.find(c=>c.unit===(leads.find(l=>l.id===bookForm.lead_id)?.unit))||CLOSERS[0];
     const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",closer_id:chosenCloser?.id||null,unit:chosenCloser?.unit||null});
     if(!error){
       if(bookForm.tipo==="reuniao"){
@@ -620,7 +624,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
       const waUrl=`https://wa.me/${closerPhone}?text=${encodeURIComponent(msg)}`;
       window.open(waUrl,"_blank");
       setBookModal(null);setBookForm({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
-    } else alert("Erro ao agendar.");
+    } else alert("Erro ao agendar: "+(error.message||"verifique os dados."));
     setSaving(false);
   };
 
@@ -656,7 +660,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
   const todaySlots=slots.filter(s=>s.date===ts&&s.status!=="cancelado"&&(!s.lead_id||allLeadsMap[s.lead_id])).sort((a,b)=>a.time.localeCompare(b.time));
   const allowedUnitsAgenda=(userProfile?.units)||["pf","chape","online"];
   const isAdminAgenda=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
-  const availLeads=leads.filter(l=>l.stage==="reuniao"&&(isAdminAgenda||!l.unit||allowedUnitsAgenda.includes(l.unit)));
+  const availLeads=leads.filter(l=>["reuniao","qualificado","negociacao"].includes(l.stage)&&(isAdminAgenda||!l.unit||allowedUnitsAgenda.includes(l.unit)));
 
   const statusColor={agendado:T.gold,confirmado:T.accent,cancelado:"#dc2626"};
   const tipoColor=(slot)=>slot?.tipo==="experimental"?"#10b981":T.accent;
