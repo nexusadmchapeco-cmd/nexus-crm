@@ -2788,7 +2788,7 @@ function Propostas({leads,mob}) {
       rr(28,y+28,vbW,VAL_H-42,10,"#e85d20");
       ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.7)"; ctx.fillText("MATRÍCULA",40,y+44);
       ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(matr,40,y+78);
-      ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillText(`Material: ${material}`,40,y+96);
+      ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillText(`1º Material: ${material}`,40,y+96);
       const vx=W/2+6;
       if(isAvista){
         // À vista — bloco único com valor total
@@ -2903,7 +2903,7 @@ function Propostas({leads,mob}) {
           {/* Valores */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <label style={{display:"block"}}><span style={lStyle}>Matrícula (R$)</span><input style={iStyle} value={form.matr} onChange={e=>ff("matr",e.target.value)} placeholder="350,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-            <label style={{display:"block"}}><span style={lStyle}>Material (R$)</span><input style={iStyle} value={form.material} onChange={e=>ff("material",e.target.value)} placeholder="120,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+            <label style={{display:"block"}}><span style={lStyle}>1º Material (R$)</span><input style={iStyle} value={form.material} onChange={e=>ff("material",e.target.value)} placeholder="120,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
           </div>
 
           <div>
