@@ -56,7 +56,6 @@ const NAV_ITEMS = [
   { id:"leads",      icon:"◎", label:"Leads"     },
   { id:"followups",  icon:"◷", label:"Follow-up" },
   { id:"relatorios", icon:"◈", label:"Relatórios"},
-  { id:"propostas",  icon:"📋", label:"Propostas"  },
   { id:"ia",         icon:"🤖", label:"Agente IA" },
 ];
 
@@ -516,7 +515,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const [selectedSlotLead,setSelectedSlotLead]=useState(null);
   const [mobDay,setMobDay]=useState(today()); // {date, time}
   const [blockMode,setBlockMode]=useState(false);
-  const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao"});
+  const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
   const [saving,setSaving]=useState(false);
 
   const weekDates=getWeekDates(weekBase);
@@ -539,11 +538,17 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const loadData=async()=>{
     setLoading(true);
     const startD=workDates[0], endD=workDates[workDates.length-1];
-    const[{data:s},{data:b}]=await Promise.all([
-      supabase.from("agenda").select("*").gte("date",startD).lte("date",endD).neq("status","cancelado"),
-      supabase.from("agenda_blocked").select("*").gte("date",startD).lte("date",endD)
-    ]);
-    // Filter slots to only show leads in allowed units (resolved after allLeadsMap loads)
+    const isAdmOrSdr=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
+    const myCloserId=userProfile?.id||null;
+    const myUnit=(userProfile?.units||[])[0]||null;
+    // Closers only see their own agenda (by closer_id or unit fallback)
+    let sQuery=supabase.from("agenda").select("*").gte("date",startD).lte("date",endD).neq("status","cancelado");
+    let bQuery=supabase.from("agenda_blocked").select("*").gte("date",startD).lte("date",endD);
+    if(!isAdmOrSdr&&myUnit){
+      sQuery=sQuery.eq("unit",myUnit);
+      bQuery=bQuery.eq("unit",myUnit);
+    }
+    const[{data:s},{data:b}]=await Promise.all([sQuery,bQuery]);
     setSlots(s||[]);setBlocked(b||[]);setLoading(false);
   };
 
@@ -558,19 +563,25 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   });
 
   const toggleBlock=async(date,time)=>{
+    const myUnit=(userProfile?.units||[])[0]||null;
     if(isBlocked(date,time)){
-      await supabase.from("agenda_blocked").delete().eq("date",date).eq("time",time);
+      let q=supabase.from("agenda_blocked").delete().eq("date",date).eq("time",time);
+      if(myUnit)q=q.eq("unit",myUnit);
+      await q;
     } else {
-      await supabase.from("agenda_blocked").insert({id:uid(),date,time});
+      await supabase.from("agenda_blocked").insert({id:uid(),date,time,unit:myUnit||null});
     }
     loadData();
   };
 
   const bookSlot=async()=>{
+    const isSdrOrAdm=(userProfile?.role)==="sdr"||(userProfile?.role)==="admin";
+    if(isSdrOrAdm&&!bookForm.closer_id){alert("Selecione a agenda do closer.");return;}
     if(!bookForm.lead_id){alert("Selecione um lead.");return;}
     setSaving(true);
     const{date,time}=bookModal;
-    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao"});
+    const chosenCloser=CLOSERS.find(c=>c.id===bookForm.closer_id)||CLOSERS.find(c=>c.unit===(leads.find(l=>l.id===bookForm.lead_id)?.unit))||CLOSERS[0];
+    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",closer_id:chosenCloser?.id||null,unit:chosenCloser?.unit||null});
     if(!error){
       if(bookForm.tipo==="reuniao"){
         await supabase.from("leads").update({stage:"reuniao"}).eq("id",bookForm.lead_id);
@@ -582,8 +593,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
       await loadData();
       // Send WhatsApp notification to closer
       const lead=leads.find(l=>l.id===bookForm.lead_id);
-      const isPF=lead?.unit==="pf";
-      const closerPhone=isPF?"5554999658474":"5549988971344";
+      const closerPhone=chosenCloser?.phone||(lead?.unit==="pf"?"5554999658474":"5549988971344");
       const dateFormatted=new Date(date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
       const msg=`🗓 *Nova reunião agendada!*
 
@@ -600,7 +610,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
 `:""}Reunião cadastrada no CRM ✅`;
       const waUrl=`https://wa.me/${closerPhone}?text=${encodeURIComponent(msg)}`;
       window.open(waUrl,"_blank");
-      setBookModal(null);setBookForm({lead_id:"",notes:""});
+      setBookModal(null);setBookForm({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
     } else alert("Erro ao agendar.");
     setSaving(false);
   };
@@ -895,19 +905,20 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
       {bookModal&&(
         <Modal title={`Agendar Reunião`} subtitle={`${new Date(bookModal.date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})} · ${bookModal.time} – ${addMinutes(bookModal.time,30)} (30 min)`} onClose={()=>setBookModal(null)} mob={mob} width={460}>
           <div style={{display:"grid",gap:13}}>
-            <Sel label="Lead *" value={bookForm.lead_id} onChange={e=>setBookForm(p=>({...p,lead_id:e.target.value}))}
-              options={[{value:"",label:"Selecione o lead..."},...availLeads.map(l=>({value:l.id,label:`${l.name} — ${STAGES.find(s=>s.id===l.stage)?.label||""}`}))]}/>
-            <div>
-              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Tipo *</span>
+            {/* Closer selector - only for SDR/Admin */}
+            {((userProfile?.role)==="sdr"||(userProfile?.role)==="admin")&&<div>
+              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Agenda do Closer *</span>
               <div style={{display:"flex",gap:8}}>
-                {[{id:"reuniao",label:"📅 Reunião",color:"#e85d20"},{id:"experimental",label:"🧪 Aula Experimental",color:"#10b981"}].map(t=>(
-                  <button key={t.id} type="button" onClick={()=>setBookForm(p=>({...p,tipo:t.id}))} className="tap"
-                    style={{flex:1,background:bookForm.tipo===t.id?t.color+"20":"transparent",border:`1.5px solid ${bookForm.tipo===t.id?t.color:T.border}`,borderRadius:10,padding:"10px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:bookForm.tipo===t.id?t.color:T.muted,transition:"all .15s"}}>
-                    {t.label}
+                {CLOSERS.map(c=>(
+                  <button key={c.id} type="button" onClick={()=>setBookForm(p=>({...p,closer_id:c.id,closer_unit:c.unit}))} className="tap"
+                    style={{flex:1,background:bookForm.closer_id===c.id?T.accent+"20":"transparent",border:`1.5px solid ${bookForm.closer_id===c.id?T.accent:T.border}`,borderRadius:10,padding:"10px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:bookForm.closer_id===c.id?T.accent:T.muted,transition:"all .15s",textAlign:"center"}}>
+                    🎯 {c.label}
                   </button>
                 ))}
               </div>
-            </div>
+            </div>}
+            <Sel label="Lead *" value={bookForm.lead_id} onChange={e=>setBookForm(p=>({...p,lead_id:e.target.value}))}
+              options={[{value:"",label:"Selecione o lead..."},...availLeads.filter(l=>!bookForm.closer_unit||l.unit===bookForm.closer_unit||!l.unit).map(l=>({value:l.id,label:`${l.name} — ${l.unit?UNITS.find(u=>u.id===l.unit)?.label||"":""}`}))]}/>
             <div>
               <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Tipo de encontro</span>
               <div style={{display:"flex",gap:8}}>
@@ -1082,7 +1093,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   };
   const filteredLeads=leads.filter(l=>{
     const s=(search||"").toLowerCase().trim();
-    const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""))||(l.email||"").toLowerCase().includes(s)||(l.course||"").toLowerCase().includes(s);
+    const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
   });
@@ -1214,7 +1225,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
                 onDragLeave={()=>setDragOver(null)}
-                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);const shouldCelebrate=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);setSearch("");setFilterUnit("");if(shouldCelebrate)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
+                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);const shouldCelebrate=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);if(shouldCelebrate)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
                 style={{minWidth:195,flex:"0 0 195px",background:over?stage.hex+"11":T.bg,border:`1.5px solid ${over?stage.hex:T.border}`,borderRadius:T.radius,padding:12,transition:"all .18s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
@@ -1265,7 +1276,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
                 onDragLeave={()=>setDragOver(null)}
-                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);if(stage.id==="matriculado"&&prev?.stage!=="matriculado"){setMatriculaPending({leadId:dragging.current,prevStage:prev?.stage});setDragOver(null);dragging.current=null;return;}const shouldCelebrateReun=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);setSearch("");setFilterUnit("");if(shouldCelebrateReun)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
+                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);if(stage.id==="matriculado"&&prev?.stage!=="matriculado"){setMatriculaPending({leadId:dragging.current,prevStage:prev?.stage});setDragOver(null);dragging.current=null;return;}const shouldCelebrateReun=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);if(shouldCelebrateReun)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
                 style={{minWidth:195,flex:"0 0 195px",background:over?stage.hex+"11":T.bg,border:`1.5px solid ${over?stage.hex:T.border}`,borderRadius:T.radius,padding:12,transition:"all .18s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
@@ -1900,320 +1911,6 @@ function WhatsAppTab({lead, mob}) {
   );
 }
 
-/* ─── ORÇAMENTO TAB ──────────────────────────────────────────────── */
-const NIVEIS_CURSO=[
-  {label:"Starter",sub:"Básico",       meses:2, cor:"#f0997b"},
-  {label:"A1",     sub:"Elementar",    meses:4, cor:"#D85A30"},
-  {label:"A2",     sub:"Pré-inter.",   meses:3, cor:"#c44a15"},
-  {label:"B1",     sub:"Intermediário",meses:7, cor:"#7a2d0c"},
-];
-
-function OrcamentoTab({lead,mob}) {
-  const [pgto,setPgto]=useState("avista");
-  const [form,setForm]=useState({modulo:"",duracao:"",matricula:"",material:"",total:"",parcela:"",formapgto:"Cartão recorrente",obs:""});
-  const [gerado,setGerado]=useState(false);
-  const [inicioIdx,setInicioIdx]=useState(0);
-  const canvasRef=useRef(null);
-  const escRef=useRef(null);
-  const f=(k,v)=>setForm(p=>({...p,[k]:v}));
-
-  useEffect(()=>{ drawEscada(); },[inicioIdx]);
-
-  const drawEscada=()=>{
-    const canvas=escRef.current; if(!canvas)return;
-    const SCALE=2;
-    const W=canvas.parentElement?.offsetWidth||480;
-    const H=240;
-    canvas.width=W*SCALE; canvas.height=H*SCALE;
-    canvas.style.width=W+"px"; canvas.style.height=H+"px";
-    const ctx=canvas.getContext("2d");
-    ctx.scale(SCALE,SCALE);
-    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
-    const N=NIVEIS_CURSO.length;
-    const PAD_L=16,PAD_R=16,PAD_B=36,PAD_T=36;
-    const areaW=W-PAD_L-PAD_R, areaH=H-PAD_T-PAD_B;
-    const stepW=areaW/N;
-    const rr=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();};
-    NIVEIS_CURSO.forEach((n,i)=>{
-      const isPast=i<inicioIdx, isInicio=i===inicioIdx;
-      const bH=((i+1)/N)*areaH;
-      const y=PAD_T+areaH-bH;
-      const x=PAD_L+i*stepW, bW=stepW-10, cx=x+stepW/2;
-      ctx.fillStyle=isPast?"#ececec":n.cor; ctx.globalAlpha=isPast?.45:1;
-      rr(x+5,y,bW,bH,6); ctx.fill(); ctx.globalAlpha=1;
-      if(isPast){ctx.strokeStyle="#c0c0c0";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(x+5,y+bH/2);ctx.lineTo(x+5+bW,y+bH/2);ctx.stroke();ctx.globalAlpha=1;}
-      ctx.textAlign="center";
-      ctx.font=`500 ${isInicio?14:12}px -apple-system,sans-serif`;
-      ctx.fillStyle=isPast?"#bbb":"#fff";
-      ctx.fillText(n.label,cx,y+22);
-      if(bH>50){ctx.font="400 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.75)";ctx.fillText(n.sub,cx,y+35);}
-      if(bH>70){ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.9)";ctx.fillText(`${n.meses} meses`,cx,y+bH-12);}
-      if(isInicio){
-        const bw2=72,bh2=18,bx=cx-bw2/2,by=y-28;
-        ctx.fillStyle="#e85d20"; rr(bx,by,bw2,bh2,4); ctx.fill();
-        ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#fff";
-        ctx.fillText("Início aqui",cx,by+13);
-        ctx.beginPath();ctx.moveTo(cx-4,by+bh2);ctx.lineTo(cx+4,by+bh2);ctx.lineTo(cx,by+bh2+6);ctx.closePath();ctx.fillStyle="#e85d20";ctx.fill();
-      }
-      ctx.font="500 11px -apple-system,sans-serif";
-      ctx.fillStyle=isInicio?"#e85d20":"#aaa";
-      ctx.fillText(n.label,cx,H-PAD_B+14);
-    });
-    ctx.strokeStyle="#e8e8e8";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(PAD_L,PAD_T+areaH+2);ctx.lineTo(W-PAD_R,PAD_T+areaH+2);ctx.stroke();
-  };
-
-  const gerar=()=>{
-    const canvas=canvasRef.current;
-    if(!canvas)return;
-    // Alta resolução: 3x para qualidade de impressão/WhatsApp
-    const SCALE=3;
-    const W=600,PAD=36;
-    const linhas=[
-      {label:"Nome",valor:lead.name||"—"},
-      {label:"Módulo de início",valor:form.modulo||"—"},
-      {label:"Duração do curso",valor:form.duracao||"—"},
-      {label:"Valor da matrícula",valor:form.matricula||"—"},
-      {label:"1º material didático",valor:form.material||"—"},
-      pgto==="avista"
-        ?{label:"Valor total do curso",valor:form.total||"—"}
-        :{label:"Parcela mensal",valor:`${form.parcela||"—"} · ${form.formapgto}`},
-    ];
-    if(form.obs)linhas.push({label:"Observações",valor:form.obs,multi:true});
-
-    const ROW_H=58,HEADER_H=110,FOOTER_H=52;
-    const obsLines=form.obs?Math.ceil(form.obs.length/55):0;
-    const obsExtra=obsLines>1?(obsLines-1)*22:0;
-    const ESC_H=200; // altura da escada no PNG
-    const H=HEADER_H+linhas.length*ROW_H+obsExtra+ESC_H+FOOTER_H+40;
-
-    // Tamanho real do canvas multiplicado pela escala
-    canvas.width=W*SCALE;
-    canvas.height=H*SCALE;
-    // Tamanho visual (CSS) — mantém o layout normal
-    canvas.style.width=W+"px";
-    canvas.style.height=H+"px";
-
-    const ctx=canvas.getContext("2d");
-    ctx.scale(SCALE,SCALE);
-    ctx.fillStyle="#ffffff";ctx.fillRect(0,0,W,H);
-
-    // Função auxiliar roundRect
-    const rr=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();};
-
-    const img=new Image();
-    img.onload=()=>{
-      const ratio=img.width/img.height;
-      const logoH=56,logoW=logoH*ratio;
-      ctx.drawImage(img,PAD,18,logoW,logoH);
-
-      ctx.font="400 13px -apple-system,system-ui,sans-serif";
-      ctx.fillStyle="#aaa";
-      ctx.textAlign="right";
-      ctx.fillText("PROPOSTA COMERCIAL",W-PAD,44);
-      const dt=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"});
-      ctx.fillText(dt,W-PAD,62);
-      ctx.textAlign="left";
-
-      // Linha separadora laranja
-      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,88,W-PAD*2,2.5);
-
-      let y=106;
-      linhas.forEach((l,i)=>{
-        const obsH=l.multi?Math.max(ROW_H,ROW_H+(Math.ceil((l.valor||"").length/55)-1)*22):ROW_H;
-        if(i%2===0){ctx.fillStyle="#f7f7f7";ctx.fillRect(PAD-8,y-10,W-(PAD-8)*2,obsH);}
-        ctx.font="600 11px -apple-system,system-ui,sans-serif";ctx.fillStyle="#bbb";
-        ctx.fillText(l.label.toUpperCase(),PAD,y+10);
-        ctx.font="500 16px -apple-system,system-ui,sans-serif";ctx.fillStyle="#111";
-        if(l.multi&&(l.valor||"").length>55){
-          const words=(l.valor||"").split(" ");let line="",ly=y+30;
-          words.forEach(w=>{const test=line+w+" ";ctx.font="400 15px -apple-system,system-ui,sans-serif";if(ctx.measureText(test).width>W-PAD*2&&line){ctx.fillText(line.trim(),PAD,ly);ly+=22;line=w+" ";}else line=test;});
-          if(line)ctx.fillText(line.trim(),PAD,ly);
-        } else {ctx.fillText(l.valor||"—",PAD,y+30);}
-        y+=obsH;
-      });
-
-      // ── Escada de níveis ──────────────────────────────────────
-      const escY=y+16;
-      ctx.font="600 11px -apple-system,system-ui,sans-serif";
-      ctx.fillStyle="#bbb";ctx.textAlign="left";
-      ctx.fillText("TRILHA DO CURSO",PAD,escY);
-
-      const eTop=escY+12, eH=ESC_H-30, eW=W-PAD*2;
-      const N=NIVEIS_CURSO.length, stepW=eW/N;
-      const PAD_T2=28, PAD_B2=24, areaH2=eH-PAD_T2-PAD_B2;
-
-      NIVEIS_CURSO.forEach((n,i)=>{
-        const isPast=i<inicioIdx, isInicio=i===inicioIdx;
-        const bH=((i+1)/N)*areaH2;
-        const by=eTop+PAD_T2+areaH2-bH;
-        const bx=PAD+i*stepW, bW=stepW-8, cx=bx+stepW/2;
-        ctx.fillStyle=isPast?"#ececec":n.cor; ctx.globalAlpha=isPast?.4:1;
-        rr(bx+4,by,bW,bH,5); ctx.fill(); ctx.globalAlpha=1;
-        if(isPast){ctx.strokeStyle="#c0c0c0";ctx.lineWidth=1.2;ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(bx+4,by+bH/2);ctx.lineTo(bx+4+bW,by+bH/2);ctx.stroke();ctx.globalAlpha=1;}
-        ctx.textAlign="center";
-        ctx.font=`500 ${isInicio?13:11}px -apple-system,sans-serif`;
-        ctx.fillStyle=isPast?"#bbb":"#fff";
-        ctx.fillText(n.label,cx,by+18);
-        if(bH>48){ctx.font="400 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.75)";ctx.fillText(n.sub,cx,by+30);}
-        if(bH>65){ctx.font="500 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.85)";ctx.fillText(`${n.meses}m`,cx,by+bH-10);}
-        if(isInicio){
-          const bw2=66,bh2=16,badgeX=cx-bw2/2,badgeY=by-24;
-          ctx.fillStyle="#e85d20"; rr(badgeX,badgeY,bw2,bh2,4); ctx.fill();
-          ctx.font="500 9px -apple-system,sans-serif"; ctx.fillStyle="#fff";
-          ctx.fillText("Início aqui",cx,badgeY+11);
-          ctx.beginPath();ctx.moveTo(cx-4,badgeY+bh2);ctx.lineTo(cx+4,badgeY+bh2);ctx.lineTo(cx,badgeY+bh2+5);ctx.closePath();ctx.fillStyle="#e85d20";ctx.fill();
-        }
-        ctx.font="500 10px -apple-system,sans-serif";
-        ctx.fillStyle=isInicio?"#e85d20":"#aaa";
-        ctx.fillText(n.label,cx,eTop+eH-4);
-      });
-      // linha chão
-      ctx.strokeStyle="#e8e8e8";ctx.lineWidth=1;ctx.beginPath();
-      ctx.moveTo(PAD,eTop+PAD_T2+areaH2+2);ctx.lineTo(W-PAD,eTop+PAD_T2+areaH2+2);ctx.stroke();
-
-      // Rodapé laranja
-      ctx.fillStyle="#e85d20";ctx.fillRect(0,H-FOOTER_H,W,FOOTER_H);
-      ctx.font="400 13px -apple-system,system-ui,sans-serif";
-      ctx.fillStyle="#fff";ctx.textAlign="center";
-      ctx.fillText("Nexus English Center  ·  nexusenglishcenter.com.br",W/2,H-FOOTER_H+30);
-      ctx.textAlign="left";
-      setGerado(true);
-    };
-    img.onerror=()=>{
-      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,88,W-PAD*2,2.5);
-      ctx.font="700 22px -apple-system,system-ui,sans-serif";ctx.fillStyle="#e85d20";
-      ctx.fillText("NEXUS ENGLISH CENTER",PAD,56);
-      setGerado(true);
-    };
-    img.src="/logo.png";
-  };
-
-  const baixar=()=>{
-    const canvas=canvasRef.current;if(!canvas)return;
-    const a=document.createElement("a");
-    a.download=`orcamento_${(lead.name||"lead").replace(/\s+/g,"_")}.png`;
-    a.href=canvas.toDataURL("image/png");a.click();
-  };
-
-  const compartilhar=async()=>{
-    const canvas=canvasRef.current;if(!canvas)return;
-    canvas.toBlob(async blob=>{
-      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[new File([blob],"orcamento.png",{type:"image/png"})]})){
-        await navigator.share({files:[new File([blob],"orcamento.png",{type:"image/png"})],title:"Orçamento Nexus"});
-      } else {baixar();}
-    },"image/png");
-  };
-
-  const iStyle={width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"10px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"};
-  const lStyle={display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5};
-
-  return (
-    <div style={{display:"grid",gap:14}}>
-      <div style={{background:T.accentLight,border:"1px solid rgba(232,93,32,.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:T.accent,fontWeight:600}}>
-        💰 Preencha os dados e gere o orçamento em PNG para enviar pelo WhatsApp
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:12}}>
-        <label style={{display:"block"}}>
-          <span style={lStyle}>Módulo de início</span>
-          <input style={iStyle} value={form.modulo} onChange={e=>f("modulo",e.target.value)} placeholder="Ex: Starter A1" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
-        </label>
-        <label style={{display:"block"}}>
-          <span style={lStyle}>Duração do curso</span>
-          <input style={iStyle} value={form.duracao} onChange={e=>f("duracao",e.target.value)} placeholder="Ex: 18 meses" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
-        </label>
-        <label style={{display:"block"}}>
-          <span style={lStyle}>Valor da matrícula</span>
-          <input style={iStyle} value={form.matricula} onChange={e=>f("matricula",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
-        </label>
-        <label style={{display:"block"}}>
-          <span style={lStyle}>1º material didático</span>
-          <input style={iStyle} value={form.material} onChange={e=>f("material",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
-        </label>
-      </div>
-
-      <div>
-        <span style={lStyle}>Forma de pagamento</span>
-        <div style={{display:"flex",gap:8}}>
-          {[["avista","À vista"],["parcelado","Parcelado"]].map(([id,lbl])=>(
-            <button key={id} type="button" onClick={()=>setPgto(id)} className="tap"
-              style={{flex:1,background:pgto===id?T.accent:"transparent",color:pgto===id?"white":T.muted,border:`1.5px solid ${pgto===id?T.accent:T.border}`,borderRadius:10,padding:"10px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
-              {lbl}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {pgto==="avista"&&(
-        <label style={{display:"block"}}>
-          <span style={lStyle}>Valor total do curso</span>
-          <input style={iStyle} value={form.total} onChange={e=>f("total",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
-        </label>
-      )}
-      {pgto==="parcelado"&&(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <label style={{display:"block"}}>
-            <span style={lStyle}>Valor da parcela</span>
-            <input style={iStyle} value={form.parcela} onChange={e=>f("parcela",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
-          </label>
-          <label style={{display:"block"}}>
-            <span style={lStyle}>Forma de pagamento</span>
-            <select style={{...iStyle,cursor:"pointer"}} value={form.formapgto} onChange={e=>f("formapgto",e.target.value)}>
-              <option>Cartão recorrente</option>
-              <option>Boleto</option>
-            </select>
-          </label>
-        </div>
-      )}
-
-      <label style={{display:"block"}}>
-        <span style={lStyle}>Observações importantes</span>
-        <textarea style={{...iStyle,resize:"vertical",minHeight:64}} value={form.obs} onChange={e=>f("obs",e.target.value)} placeholder="Ex: Desconto válido até sexta-feira..." onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
-      </label>
-
-      {/* Escada de níveis */}
-      <div>
-        <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Trilha do curso — ponto de início</span>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-          {NIVEIS_CURSO.map((n,i)=>(
-            <button key={n.label} type="button" onClick={()=>setInicioIdx(i)} className="tap"
-              style={{padding:"5px 14px",fontSize:12,fontWeight:700,border:`1.5px solid ${inicioIdx===i?"#e85d20":T.border}`,borderRadius:20,background:inicioIdx===i?"#e85d20":"transparent",color:inicioIdx===i?"white":T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
-              {n.label}
-            </button>
-          ))}
-        </div>
-        <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${T.border}`}}>
-          <canvas ref={escRef} style={{display:"block",width:"100%"}}/>
-          <div style={{background:"#f8f8f8",padding:"10px 14px",display:"flex",gap:16,flexWrap:"wrap",borderTop:`1px solid ${T.border}`}}>
-            {(()=>{
-              const restantes=NIVEIS_CURSO.slice(inicioIdx);
-              const totalMeses=restantes.reduce((s,n)=>s+n.meses,0);
-              const anos=Math.floor(totalMeses/12), mesesR=totalMeses%12;
-              const dur=anos>0?`${anos} ano${anos>1?"s":""} e ${mesesR} meses`:`${totalMeses} meses`;
-              return(<>
-                <div><div style={{fontSize:10,color:T.muted}}>Começa em</div><div style={{fontSize:14,fontWeight:700,color:"#e85d20"}}>{NIVEIS_CURSO[inicioIdx].label}</div></div>
-                <div style={{borderLeft:`1px solid ${T.border}`,paddingLeft:14}}><div style={{fontSize:10,color:T.muted}}>Duração total</div><div style={{fontSize:14,fontWeight:700,color:T.text}}>{dur}</div></div>
-                <div style={{borderLeft:`1px solid ${T.border}`,paddingLeft:14}}><div style={{fontSize:10,color:T.muted}}>Níveis</div><div style={{fontSize:14,fontWeight:700,color:T.text}}>{restantes.length} de {NIVEIS_CURSO.length}</div></div>
-              </>);
-            })()}
-          </div>
-        </div>
-      </div>
-
-      <Btn onClick={gerar} full>📄 Gerar orçamento</Btn>
-
-      <canvas ref={canvasRef} style={{width:"100%",borderRadius:10,border:`1px solid ${T.border}`,display:gerado?"block":"none"}}/>
-
-      {gerado&&(
-        <div style={{display:"flex",gap:8}}>
-          <Btn onClick={baixar} full variant="ghost">⬇ Baixar PNG</Btn>
-          <Btn onClick={compartilhar} full>📤 Compartilhar</Btn>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ─── LEAD MODAL ─────────────────────────────────────────────────── */
 function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [tab,setTab]=useState("info"),[editing,setEditing]=useState(!lead.unit);
@@ -2257,7 +1954,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
         ))}
       </div>
       <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,marginBottom:18}}>
-        {[["info","Infos"],["historico","Histórico"],["whatsapp","💬 WhatsApp"],["followup","Follow-up"],["orcamento","💰 Orçamento"]].map(([id,lbl])=>(
+        {[["info","Infos"],["historico","Histórico"],["whatsapp","💬 WhatsApp"],["followup","Follow-up"]].map(([id,lbl])=>(
           <button key={id} onClick={()=>setTab(id)} className="tap"
             style={{flex:1,background:"none",border:"none",borderBottom:tab===id?`2px solid ${T.accent}`:"2px solid transparent",padding:"10px 8px",fontSize:14,fontWeight:600,color:tab===id?T.accent:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:-1}}>
             {lbl}
@@ -2500,7 +2197,6 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
           </div>
         </div>
       )}
-      {tab==="orcamento"&&<OrcamentoTab lead={lead} mob={mob}/>}
       {/* Concluir follow-up modal */}
       {concluiModal&&(
         <div onClick={e=>e.target===e.currentTarget&&setConcluiModal(false)}
@@ -2595,375 +2291,6 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
         </div>
       )}
     </Modal>
-  );
-}
-
-/* ─── PROPOSTAS ──────────────────────────────────────────────────── */
-const NIVEIS_PROP=[
-  {label:"Starter",sub:"Básico",      meses:2,desc:"Vocabulário e primeiras frases.",cor:"#333"},
-  {label:"A1",     sub:"Elementar",   meses:4,desc:"Frases do dia a dia.",cor:"#333"},
-  {label:"A2",     sub:"Pré-inter.",  meses:3,desc:"Começa a destravar a fala.",cor:"#e85d20"},
-  {label:"B1",     sub:"Intermediário",meses:7,desc:"100% em inglês. Uso real.",cor:"#7a2d0c"},
-];
-const FEATURES_PROP=[
-  {title:"Aulas interativas e focadas em conversação",sub:"Aprenda falando, desde o primeiro dia."},
-  {title:"Turmas reduzidas",sub:"No máximo 6 alunos — mais tempo de fala."},
-  {title:"Plataforma de estudos online",sub:"Pratique em casa, no seu ritmo."},
-  {title:"Professor Nex (IA no WhatsApp)",sub:"Tire dúvidas e pratique a qualquer hora."},
-];
-const MESES_NOMES_P=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-
-function Propostas({leads,mob}) {
-  const negLeads=leads.filter(l=>l.stage==="negociacao");
-  const [tipo,setTipo]=useState("individual");
-  const [leadSel,setLeadSel]=useState(null);
-  const [moduloIdx,setModuloIdx]=useState(0);
-  const [pgtoMode,setPgtoMode]=useState("parcelado");
-  const [form,setForm]=useState({mes:"",matr:"",material:"",parcela:"",data1parcela:"",total:"",pgto:"Cartão recorrente",obs:"",filho:"",resp:""});
-  const [gerado,setGerado]=useState(false);
-  const canvasRef=useRef(null);
-  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
-
-  const mesesOpts=Array.from({length:6},(_,i)=>{
-    const d=new Date(new Date().getFullYear(),new Date().getMonth()+i,1);
-    return `${MESES_NOMES_P[d.getMonth()]} ${d.getFullYear()}`;
-  });
-
-  const fmtData=(val)=>{if(!val)return"";const[y,m,d]=val.split("-");return`${d}/${m}/${y}`;};
-
-  const gerar=()=>{
-    const canvas=canvasRef.current; if(!canvas)return;
-    const SCALE=3,W=600;
-    const nome=(leadSel?.name)||"Aluno";
-    const unidade=leadSel?UNITS.find(u=>u.id===leadSel.unit)?.label||"Nexus":form.unidade||"Nexus";
-    const mes=form.mes||mesesOpts[0];
-    const matr=form.matr?`R$ ${form.matr}`:"—";
-    const parcela=form.parcela?`R$ ${form.parcela}`:"—";
-    const totalCurso=form.total?`R$ ${form.total}`:"—";
-    const data1=fmtData(form.data1parcela);
-    const material=form.material?`R$ ${form.material}`:"—";
-    const obs=form.obs;
-    const nomeDisplay=tipo==="filho"&&form.filho?form.filho:nome;
-    const subtitulo=tipo==="filho"&&form.resp?`Responsável: ${form.resp}`:`Proposta personalizada · ${unidade}`;
-    const totalMeses=NIVEIS_PROP.slice(moduloIdx).reduce((s,n)=>s+n.meses,0);
-    const isAvista=pgtoMode==="avista";
-    const HDR=190,JORNADA=210,FEAT_H=132,VAL_H=isAvista?140:(data1?172:150),OBS_H=obs?52:0,FOOTER_H=46;
-    const H=HDR+JORNADA+FEAT_H+VAL_H+OBS_H+FOOTER_H;
-    canvas.width=W*SCALE; canvas.height=H*SCALE;
-    canvas.style.width=W+"px"; canvas.style.height=H+"px";
-    const ctx=canvas.getContext("2d"); ctx.scale(SCALE,SCALE);
-    const rr=(x,y,w,h,r,fill)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();if(fill!==undefined){ctx.fillStyle=fill;ctx.fill();}};
-    // HEADER — sem bolinhas decorativas
-    ctx.fillStyle="#111"; ctx.fillRect(0,0,W,HDR);
-    const logoImg=new Image();
-    logoImg.onload=()=>{const lh=30,lw=lh*(logoImg.width/logoImg.height);ctx.drawImage(logoImg,28,18,lw,lh);drawRest();};
-    logoImg.onerror=()=>{ctx.font="700 18px -apple-system,sans-serif";ctx.fillStyle="#fff";ctx.fillText("NEXUS",28,40);drawRest();};
-    logoImg.src="/logo.png";
-    function drawRest(){
-      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("PROPOSTA PERSONALIZADA PARA",28,68);
-      ctx.font=`700 ${nomeDisplay.length>18?26:32}px -apple-system,sans-serif`; ctx.fillStyle="#fff"; ctx.fillText(nomeDisplay,28,106);
-      ctx.font="400 12px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText(subtitulo,28,126);
-      rr(28,140,148,28,6,"#e85d20"); ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(`Início: ${mes}`,40,158);
-      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#555"; ctx.textAlign="right"; ctx.fillText(unidade,W-28,158); ctx.textAlign="left";
-      let y=HDR;
-      // JORNADA — linha do tempo com setas
-      const JORNADA_H=JORNADA;
-      ctx.fillStyle="#ffffff"; ctx.fillRect(0,y,W,JORNADA_H);
-      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("A JORNADA NO CURSO",28,y+18);
-
-      const N=NIVEIS_PROP.length;
-      const tlY=y+90; // y da linha central — espaço suficiente pro badge acima
-      const tlX1=28, tlX2=W-28;
-      const tlW=tlX2-tlX1;
-      const stepW=tlW/N;
-
-      // Linha base cinza
-      ctx.strokeStyle="#e0e0e0"; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(tlX1,tlY+10); ctx.lineTo(tlX2,tlY+10); ctx.stroke();
-
-      // Linha de progresso laranja (até o fim do último nível ativo)
-      const progressX=tlX1+stepW*(NIVEIS_PROP.length); // sempre full
-      ctx.strokeStyle="#e85d20"; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(tlX1,tlY+10); ctx.lineTo(progressX,tlY+10); ctx.stroke();
-
-      NIVEIS_PROP.forEach((n,i)=>{
-        const isPast=i<moduloIdx, isStart=i===moduloIdx;
-        const dotX=tlX1+stepW*i+stepW/2;
-        const dotY=tlY+10;
-
-        // Seta entre níveis (exceto antes do primeiro)
-        if(i>0){
-          const arrowX=tlX1+stepW*i;
-          ctx.fillStyle=isPast?"#ccc":"#e85d20";
-          ctx.beginPath();
-          ctx.moveTo(arrowX-4,dotY-4);
-          ctx.lineTo(arrowX+4,dotY);
-          ctx.lineTo(arrowX-4,dotY+4);
-          ctx.closePath(); ctx.fill();
-        }
-
-        // Círculo do nível
-        const r=isPast?7:isStart?14:9;
-        // Para o início: anel externo pulsante
-        if(isStart){
-          // anel externo suave
-          ctx.beginPath(); ctx.arc(dotX,dotY,r+6,0,Math.PI*2);
-          ctx.fillStyle="rgba(232,93,32,.12)"; ctx.fill();
-          // anel médio
-          ctx.beginPath(); ctx.arc(dotX,dotY,r+3,0,Math.PI*2);
-          ctx.fillStyle="rgba(232,93,32,.22)"; ctx.fill();
-        }
-        ctx.beginPath(); ctx.arc(dotX,dotY,r,0,Math.PI*2);
-        ctx.fillStyle=isPast?"#e0e0e0":isStart?"#e85d20":"rgba(232,93,32,.15)";
-        ctx.fill();
-        if(isStart){
-          // contorno branco interno
-          ctx.strokeStyle="#fff"; ctx.lineWidth=2;
-          ctx.beginPath(); ctx.arc(dotX,dotY,r,0,Math.PI*2); ctx.stroke();
-        }
-        if(!isPast&&!isStart){ ctx.strokeStyle="#e85d20"; ctx.lineWidth=1.5; ctx.stroke(); }
-
-        // Letra dentro do círculo
-        ctx.font=`${isStart?"700":"500"} ${isStart?13:10}px -apple-system,sans-serif`;
-        ctx.fillStyle=isPast?"#bbb":isStart?"#fff":"#e85d20";
-        ctx.textAlign="center";
-        ctx.fillText(n.label[0],dotX,dotY+4);
-        ctx.textAlign="left";
-
-        // Label acima do círculo
-        ctx.font=`${isStart?"700":"500"} ${isStart?14:11}px -apple-system,sans-serif`;
-        ctx.fillStyle=isPast?"#bbb":isStart?"#e85d20":"#444";
-        ctx.textAlign="center";
-        ctx.fillText(n.label,dotX,tlY-22);
-        ctx.textAlign="left";
-
-        // Meses abaixo
-        ctx.font=`${isStart?"500":"400"} ${isStart?11:10}px -apple-system,sans-serif`;
-        ctx.fillStyle=isPast?"#ccc":isStart?"#e85d20":"#888";
-        ctx.textAlign="center";
-        ctx.fillText(`${n.meses} meses`,dotX,tlY+32);
-        ctx.textAlign="left";
-
-        // Badge "Início aqui" para o módulo selecionado
-        if(isStart){
-          const bw=72,bh=18,bx=dotX-bw/2,by=tlY-58;
-          // linha vertical conectando badge ao círculo
-          ctx.strokeStyle="#e85d20"; ctx.lineWidth=1.5; ctx.globalAlpha=.4;
-          ctx.beginPath(); ctx.moveTo(dotX,by+bh+5); ctx.lineTo(dotX,dotY-r-6); ctx.stroke();
-          ctx.globalAlpha=1;
-          rr(bx,by,bw,bh,6,"#e85d20");
-          ctx.font="600 9px -apple-system,sans-serif"; ctx.fillStyle="#fff";
-          ctx.textAlign="center"; ctx.fillText("INÍCIO AQUI",dotX,by+12); ctx.textAlign="left";
-          // seta pra baixo
-          ctx.beginPath(); ctx.moveTo(dotX-5,by+bh); ctx.lineTo(dotX+5,by+bh); ctx.lineTo(dotX,by+bh+6); ctx.closePath();
-          ctx.fillStyle="#e85d20"; ctx.fill();
-        }
-      });
-
-      // Duração total
-      const durStr=`Duração total: ${totalMeses} meses`;
-      ctx.font="500 10px -apple-system,sans-serif";
-      const durW=ctx.measureText(durStr).width+18;
-      rr(W-28-durW,y+JORNADA_H-22,durW,15,5,"#e85d20");
-      ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.fillText(durStr,W-28-durW/2,y+JORNADA_H-11); ctx.textAlign="left";
-      y+=JORNADA_H;
-      // FEATURES — mais compactas, linha única por item
-      ctx.fillStyle="#fff"; ctx.fillRect(0,y,W,FEAT_H);
-      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("O QUE ESTÁ INCLUÍDO",28,y+18);
-      const fw=(W-56-10)/2,fh=40;
-      FEATURES_PROP.forEach((ft,i)=>{
-        const fx=28+(i%2)*(fw+10),fy=y+26+Math.floor(i/2)*(fh+6);
-        rr(fx,fy,fw,fh,7,"#f7f7f7");
-        // Dot laranja
-        ctx.fillStyle="#e85d20"; ctx.beginPath(); ctx.arc(fx+14,fy+fh/2,3,0,Math.PI*2); ctx.fill();
-        ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#111"; ctx.fillText(ft.title,fx+24,fy+16);
-        ctx.font="400 10px -apple-system,sans-serif"; ctx.fillStyle="#999"; ctx.fillText(ft.sub,fx+24,fy+29);
-      });
-      y+=FEAT_H;
-      // VALORES
-      ctx.fillStyle="#1a1a1a"; ctx.fillRect(0,y,W,VAL_H);
-      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("CONDIÇÃO ESPECIAL",28,y+20);
-      const vbW=W/2-34;
-      // Matrícula (sempre aparece)
-      rr(28,y+28,vbW,VAL_H-42,10,"#e85d20");
-      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.7)"; ctx.fillText("MATRÍCULA",40,y+44);
-      ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(matr,40,y+78);
-      ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillText(`1º Material: ${material}`,40,y+96);
-      const vx=W/2+6;
-      if(isAvista){
-        // À vista — bloco único com valor total
-        rr(vx,y+28,vbW,VAL_H-42,10,"#2a2a2a");
-        ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText("VALOR TOTAL DO CURSO",vx+12,y+44);
-        ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(totalCurso,vx+12,y+78);
-        ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("Pagamento à vista",vx+12,y+96);
-      } else {
-        // Parcelado
-        rr(vx,y+28,vbW,VAL_H-42,10,"#2a2a2a");
-        ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText("MENSALIDADE",vx+12,y+44);
-        ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(parcela,vx+12,y+78);
-        ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText(form.pgto,vx+12,y+96);
-        if(data1){rr(vx+12,y+106,vbW-24,17,5,"#333");ctx.font="500 10px -apple-system,sans-serif";ctx.fillStyle="#e85d20";ctx.textAlign="center";ctx.fillText(`1ª parcela: ${data1}`,vx+12+(vbW-24)/2,y+118);ctx.textAlign="left";}
-      }
-      y+=VAL_H;
-      if(obs){ctx.fillStyle="#fff8f5";ctx.fillRect(0,y,W,OBS_H);ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle="#c44a15";ctx.fillText("★  "+obs,28,y+OBS_H/2+5);y+=OBS_H;}
-      ctx.fillStyle="#e85d20"; ctx.fillRect(0,y,W,FOOTER_H);
-      ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText("Nexus English Center  ·  Proposta personalizada",28,y+FOOTER_H/2+4);
-      ctx.font="500 11px -apple-system,sans-serif"; ctx.textAlign="right"; ctx.fillText("Inglês que você usa de verdade",W-28,y+FOOTER_H/2+4); ctx.textAlign="left";
-      setGerado(true);
-    }
-  };
-
-  const baixar=()=>{
-    const canvas=canvasRef.current; if(!canvas)return;
-    const a=document.createElement("a");
-    a.download=`proposta_nexus_${(leadSel?.name||"lead").replace(/\s+/g,"_")}.png`;
-    a.href=canvas.toDataURL("image/png"); a.click();
-  };
-
-  const compartilhar=async()=>{
-    const canvas=canvasRef.current; if(!canvas)return;
-    canvas.toBlob(async blob=>{
-      const file=new File([blob],"proposta.png",{type:"image/png"});
-      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-        await navigator.share({files:[file],title:"Proposta Nexus"});
-      } else {baixar();}
-    },"image/png");
-  };
-
-  const iStyle={width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"10px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"};
-  const lStyle={display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5};
-
-  return (
-    <div style={{animation:"fadeUp .3s"}}>
-      <div style={{marginBottom:20}}>
-        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:700,letterSpacing:"-.5px"}}>Propostas</h1>
-        <p style={{color:T.muted,fontSize:13,marginTop:4}}>Gere propostas personalizadas em PNG para enviar pelo WhatsApp</p>
-      </div>
-
-      <div style={{display:mob?"flex":"grid",gridTemplateColumns:"380px 1fr",flexDirection:"column",gap:16,alignItems:"flex-start"}}>
-        {/* Formulário */}
-        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:20,display:"grid",gap:14}}>
-
-          {/* Tipo */}
-          <div>
-            <span style={lStyle}>Tipo de proposta</span>
-            <div style={{display:"flex",gap:8}}>
-              {[["individual","Individual"],["filho","Para filho/filha"]].map(([id,lbl])=>(
-                <button key={id} type="button" onClick={()=>setTipo(id)} className="tap"
-                  style={{flex:1,background:tipo===id?T.accent:"transparent",color:tipo===id?"white":T.muted,border:`1.5px solid ${tipo===id?T.accent:T.border}`,borderRadius:10,padding:"9px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Lead */}
-          <div>
-            <span style={lStyle}>Lead em negociação</span>
-            <select style={{...iStyle,cursor:"pointer"}} value={leadSel?.id||""} onChange={e=>{const l=negLeads.find(x=>x.id===e.target.value);setLeadSel(l||null);setGerado(false);}}>
-              <option value="">Selecione o lead...</option>
-              {negLeads.map(l=>{const u=UNITS.find(x=>x.id===l.unit);return(<option key={l.id} value={l.id}>{l.name}{u?` — ${u.label}`:""}</option>);})}
-            </select>
-            {leadSel&&(
-              <div style={{marginTop:8,background:T.accentLight,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.accent,fontWeight:600}}>
-                {leadSel.name} · {UNITS.find(u=>u.id===leadSel.unit)?.label||"Sem unidade"} · {leadSel.course||"Sem curso"}
-              </div>
-            )}
-          </div>
-
-          {/* Filho */}
-          {tipo==="filho"&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <label style={{display:"block"}}><span style={lStyle}>Nome do filho/filha</span><input style={iStyle} value={form.filho} onChange={e=>ff("filho",e.target.value)} placeholder="Ex: Pedro Silva" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-              <label style={{display:"block"}}><span style={lStyle}>Responsável</span><input style={iStyle} value={form.resp} onChange={e=>ff("resp",e.target.value)} placeholder="Ex: Maria Silva" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-            </div>
-          )}
-
-          {/* Mês + Módulo */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <label style={{display:"block"}}>
-              <span style={lStyle}>Mês de início</span>
-              <select style={{...iStyle,cursor:"pointer"}} value={form.mes} onChange={e=>ff("mes",e.target.value)}>
-                {mesesOpts.map(m=><option key={m}>{m}</option>)}
-              </select>
-            </label>
-            <div>
-              <span style={lStyle}>Módulo de início</span>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:2}}>
-                {NIVEIS_PROP.map((n,i)=>(
-                  <button key={n.label} type="button" onClick={()=>setModuloIdx(i)} className="tap"
-                    style={{padding:"6px 10px",fontSize:11,fontWeight:700,border:`1.5px solid ${moduloIdx===i?"#e85d20":T.border}`,borderRadius:8,background:moduloIdx===i?"#e85d20":"transparent",color:moduloIdx===i?"white":T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
-                    {n.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Valores */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <label style={{display:"block"}}><span style={lStyle}>Matrícula (R$)</span><input style={iStyle} value={form.matr} onChange={e=>ff("matr",e.target.value)} placeholder="350,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-            <label style={{display:"block"}}><span style={lStyle}>1º Material (R$)</span><input style={iStyle} value={form.material} onChange={e=>ff("material",e.target.value)} placeholder="120,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-          </div>
-
-          <div>
-            <span style={lStyle}>Forma de pagamento do curso</span>
-            <div style={{display:"flex",gap:8}}>
-              {[["parcelado","Parcelado"],["avista","À vista"]].map(([id,lbl])=>(
-                <button key={id} type="button" onClick={()=>setPgtoMode(id)} className="tap"
-                  style={{flex:1,background:pgtoMode===id?T.accent:"transparent",color:pgtoMode===id?"white":T.muted,border:`1.5px solid ${pgtoMode===id?T.accent:T.border}`,borderRadius:10,padding:"9px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {pgtoMode==="parcelado"&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-              <label style={{display:"block"}}><span style={lStyle}>Valor da parcela (R$)</span><input style={iStyle} value={form.parcela} onChange={e=>ff("parcela",e.target.value)} placeholder="359,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-              <label style={{display:"block"}}><span style={lStyle}>Data da 1ª parcela</span><input type="date" style={iStyle} value={form.data1parcela} onChange={e=>ff("data1parcela",e.target.value)} onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-              <label style={{display:"block"}}>
-                <span style={lStyle}>Pagamento</span>
-                <select style={{...iStyle,cursor:"pointer"}} value={form.pgto} onChange={e=>ff("pgto",e.target.value)}>
-                  <option>Cartão recorrente</option>
-                  <option>Boleto</option>
-                </select>
-              </label>
-            </div>
-          )}
-
-          {pgtoMode==="avista"&&(
-            <label style={{display:"block"}}><span style={lStyle}>Valor total do curso (R$)</span><input style={iStyle} value={form.total} onChange={e=>ff("total",e.target.value)} placeholder="5.490,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-          )}
-
-          <label style={{display:"block"}}>
-            <span style={lStyle}>Observação especial</span>
-            <textarea style={{...iStyle,resize:"vertical",minHeight:60}} value={form.obs} onChange={e=>ff("obs",e.target.value)} placeholder="Ex: Condição válida até sexta-feira..." onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
-          </label>
-
-          <Btn onClick={()=>{gerar();}} full>📋 Gerar proposta</Btn>
-
-          {gerado&&(
-            <div style={{display:"flex",gap:8}}>
-              <Btn onClick={baixar} full variant="ghost">⬇ Baixar PNG</Btn>
-              <Btn onClick={compartilhar} full>📤 Compartilhar</Btn>
-            </div>
-          )}
-        </div>
-
-        {/* Preview */}
-        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,overflow:"hidden",minHeight:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          {!gerado?(
-            <div style={{textAlign:"center",color:T.muted,padding:40}}>
-              <div style={{fontSize:40,marginBottom:12}}>📋</div>
-              <div style={{fontWeight:600,fontSize:15}}>Preencha os dados e gere a proposta</div>
-              <div style={{fontSize:13,marginTop:6}}>O PNG aparecerá aqui para download e compartilhamento</div>
-            </div>
-          ):null}
-          <canvas ref={canvasRef} style={{width:"100%",display:gerado?"block":"none"}}/>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -3246,7 +2573,7 @@ export default function App() {
     (async()=>{
       // Load user profile first
       const{data:profile}=await supabase.from("user_profiles").select("*").eq("id",session.user.id).single();
-      setUserProfile(profile||{role:"admin",units:["pf","chape","online"],name:"Admin"});
+      setUserProfile(profile?{...profile,id:session.user.id}:{role:"admin",units:["pf","chape","online"],name:"Admin",id:session.user.id});
 
       const{data:ld}=await supabase.from("leads").select("*").order("created_at",{ascending:false});
       const{data:hd}=await supabase.from("lead_history").select("*").order("date",{ascending:false});
@@ -3329,7 +2656,6 @@ export default function App() {
               {page==="leads"      &&<LeadsList leads={leads} onSelect={setSelected} onAdd={()=>setShowAdd(true)} mob={mob}/>}
               {page==="followups"  &&<FollowUps leads={leads} onSelect={setSelected} mob={mob}/>}
               {page==="relatorios" &&<Relatorios leads={leads} mob={mob}/>}
-              {page==="propostas"  &&<Propostas leads={leads} mob={mob}/>}
               {page==="ia"          &&<AgenteIA leads={leads} mob={mob}/>}
             </>
           )}
