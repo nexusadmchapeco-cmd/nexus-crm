@@ -594,7 +594,10 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     const{date,time}=bookModal;
     const myCloserUnit=(userProfile?.units||[])[0]||null;
     const chosenCloser=CLOSERS.find(c=>c.id===bookForm.closer_id)||CLOSERS.find(c=>c.unit===myCloserUnit)||CLOSERS.find(c=>c.unit===(leads.find(l=>l.id===bookForm.lead_id)?.unit))||CLOSERS[0];
-    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",closer_id:chosenCloser?.id||null,unit:chosenCloser?.unit||null});
+    const insertData={id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",unit:chosenCloser?.unit||null};
+    // Don't insert closer_id as FK - just use unit for filtering
+    const{data:insertedSlot,error}=await supabase.from("agenda").insert(insertData).select().single();
+    if(error){console.error("Agenda insert error:",error);alert("Erro ao agendar: "+error.message+" (code: "+error.code+")");setSaving(false);return;}
     if(!error){
       if(bookForm.tipo==="reuniao"){
         await supabase.from("leads").update({stage:"reuniao"}).eq("id",bookForm.lead_id);
