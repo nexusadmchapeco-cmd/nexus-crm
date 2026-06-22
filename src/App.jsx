@@ -49,8 +49,8 @@ const CADENCIA_CLOSER = [
 ];
 
 const CLOSERS = [
-  { id:"8084ae03-a0d5-4f12-9f5f-04f6e7e2b4c1", name:"Lucas",  unit:"pf",    phone:"5554999658474", label:"Lucas — Nexus PF" },
-  { id:"10868121-5b0e-4e2a-9b3a-2f7c8d1e6f0a", name:"Jaziel", unit:"chape", phone:"5549988971344", label:"Jaziel — Nexus Chapecó" },
+  { id:"8084ae03-718c-452e-9573-710247b29776", name:"Lucas",  unit:"pf",    phone:"5554999658474", label:"Lucas — Nexus PF" },
+  { id:"10868121-37e9-468a-a7d1-9b422c72384c", name:"Jaziel", unit:"chape", phone:"5549988971344", label:"Jaziel — Nexus Chapecó" },
 ];
 
 const NAV_ITEMS = [
