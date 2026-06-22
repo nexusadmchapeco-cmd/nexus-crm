@@ -2666,33 +2666,89 @@ function Propostas({leads,mob}) {
       rr(28,140,148,28,6,"#e85d20"); ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(`Início: ${mes}`,40,158);
       ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#555"; ctx.textAlign="right"; ctx.fillText(unidade,W-28,158); ctx.textAlign="left";
       let y=HDR;
-      // JORNADA
-      ctx.fillStyle="#f5f5f5"; ctx.fillRect(0,y,W,JORNADA);
+      // JORNADA — linha do tempo com setas
+      const JORNADA_H=JORNADA;
+      ctx.fillStyle="#ffffff"; ctx.fillRect(0,y,W,JORNADA_H);
       ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("A JORNADA NO CURSO",28,y+18);
-      const cw=(W-56-18)/4,ch=JORNADA-46;
+
+      const N=NIVEIS_PROP.length;
+      const tlY=y+44; // y da linha central
+      const tlX1=28, tlX2=W-28;
+      const tlW=tlX2-tlX1;
+      const stepW=tlW/N;
+
+      // Linha base cinza
+      ctx.strokeStyle="#e0e0e0"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(tlX1,tlY+10); ctx.lineTo(tlX2,tlY+10); ctx.stroke();
+
+      // Linha de progresso laranja (até o fim do último nível ativo)
+      const progressX=tlX1+stepW*(NIVEIS_PROP.length); // sempre full
+      ctx.strokeStyle="#e85d20"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(tlX1,tlY+10); ctx.lineTo(progressX,tlY+10); ctx.stroke();
+
       NIVEIS_PROP.forEach((n,i)=>{
-        const isPast=i<moduloIdx,isStart=i===moduloIdx;
-        const cx=28+i*(cw+6),cy=y+26;
-        // cores mais suaves: cinza claro para não-início, sem #222
-        const bg=isPast?"#dedede":isStart?"#e85d20":i===3?"#7a2d0c":"#4a4a4a";
-        rr(cx,cy,cw,ch,8,bg);
-        ctx.font="700 12px -apple-system,sans-serif"; ctx.fillStyle=isPast?"#aaa":"#fff"; ctx.fillText(n.label,cx+10,cy+17);
-        ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle=isPast?"#bbb":isStart?"rgba(255,255,255,.9)":"#e85d20"; ctx.fillText(`${n.meses} meses`,cx+10,cy+30);
-        // Badge com mais espaço
-        if(isStart){
-          const badgeW=54,badgeH=14;
-          rr(cx+cw-badgeW-8,cy+6,badgeW,badgeH,4,"rgba(255,255,255,.22)");
-          ctx.font="500 8px -apple-system,sans-serif"; ctx.fillStyle="#fff";
-          ctx.textAlign="center"; ctx.fillText("INÍCIO AQUI",cx+cw-8-badgeW/2,cy+15); ctx.textAlign="left";
+        const isPast=i<moduloIdx, isStart=i===moduloIdx;
+        const dotX=tlX1+stepW*i+stepW/2;
+        const dotY=tlY+10;
+
+        // Seta entre níveis (exceto antes do primeiro)
+        if(i>0){
+          const arrowX=tlX1+stepW*i;
+          ctx.fillStyle=isPast?"#ccc":"#e85d20";
+          ctx.beginPath();
+          ctx.moveTo(arrowX-4,dotY-4);
+          ctx.lineTo(arrowX+4,dotY);
+          ctx.lineTo(arrowX-4,dotY+4);
+          ctx.closePath(); ctx.fill();
         }
-        if(!isPast&&ch>52){ctx.font="400 9px -apple-system,sans-serif";ctx.fillStyle=isStart?"rgba(255,255,255,.75)":"rgba(255,255,255,.55)";const words=n.desc.split(" ");let line="",ly=cy+44;words.forEach(w=>{const t=line+w+" ";if(ctx.measureText(t).width>cw-14&&line){ctx.fillText(line.trim(),cx+10,ly);ly+=12;line=w+" ";}else line=t;});if(line)ctx.fillText(line.trim(),cx+10,ly);}
-        if(isPast){ctx.strokeStyle="#c0c0c0";ctx.lineWidth=1;ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(cx+6,cy+ch/2);ctx.lineTo(cx+cw-6,cy+ch/2);ctx.stroke();ctx.globalAlpha=1;}
+
+        // Círculo do nível
+        const r=isPast?7:isStart?11:9;
+        ctx.beginPath(); ctx.arc(dotX,dotY,r,0,Math.PI*2);
+        ctx.fillStyle=isPast?"#e0e0e0":isStart?"#e85d20":"rgba(232,93,32,.2)";
+        ctx.fill();
+        if(!isPast&&!isStart){ ctx.strokeStyle="#e85d20"; ctx.lineWidth=1.5; ctx.stroke(); }
+
+        // Letra dentro do círculo
+        ctx.font=`${isStart?"700":"500"} ${isStart?11:10}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#bbb":isStart?"#fff":"#e85d20";
+        ctx.textAlign="center";
+        ctx.fillText(n.label[0],dotX,dotY+4);
+        ctx.textAlign="left";
+
+        // Label acima do círculo
+        ctx.font=`${isStart?"700":"500"} ${isStart?13:11}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#bbb":isStart?"#e85d20":"#333";
+        ctx.textAlign="center";
+        ctx.fillText(n.label,dotX,tlY-14);
+        ctx.textAlign="left";
+
+        // Meses abaixo
+        ctx.font="400 10px -apple-system,sans-serif";
+        ctx.fillStyle=isPast?"#ccc":"#888";
+        ctx.textAlign="center";
+        ctx.fillText(`${n.meses} meses`,dotX,tlY+28);
+        ctx.textAlign="left";
+
+        // Badge "Início aqui" para o módulo selecionado
+        if(isStart){
+          const bw=64,bh=16,bx=dotX-bw/2,by=tlY-44;
+          ctx.fillStyle="#e85d20"; rr(bx,by,bw,bh,5,"#e85d20");
+          ctx.font="500 9px -apple-system,sans-serif"; ctx.fillStyle="#fff";
+          ctx.textAlign="center"; ctx.fillText("INÍCIO AQUI",dotX,by+11); ctx.textAlign="left";
+          // seta pra baixo
+          ctx.beginPath(); ctx.moveTo(dotX-4,by+bh); ctx.lineTo(dotX+4,by+bh); ctx.lineTo(dotX,by+bh+5); ctx.closePath();
+          ctx.fillStyle="#e85d20"; ctx.fill();
+        }
       });
+
+      // Duração total
       const durStr=`Duração total: ${totalMeses} meses`;
       ctx.font="500 10px -apple-system,sans-serif";
-      const durW=ctx.measureText(durStr).width+20;
-      rr(W-28-durW,y+JORNADA-22,durW,15,5,"#333"); ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.fillText(durStr,W-28-durW/2,y+JORNADA-11); ctx.textAlign="left";
-      y+=JORNADA;
+      const durW=ctx.measureText(durStr).width+18;
+      rr(W-28-durW,y+JORNADA_H-22,durW,15,5,"#e85d20");
+      ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.fillText(durStr,W-28-durW/2,y+JORNADA_H-11); ctx.textAlign="left";
+      y+=JORNADA_H;
       // FEATURES — mais compactas, linha única por item
       ctx.fillStyle="#fff"; ctx.fillRect(0,y,W,FEAT_H);
       ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("O QUE ESTÁ INCLUÍDO",28,y+18);
