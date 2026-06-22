@@ -522,6 +522,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const [allLeadsMap,setAllLeadsMap]=useState({});
   const [selectedSlotLead,setSelectedSlotLead]=useState(null);
   const [mobDay,setMobDay]=useState(today()); // {date, time}
+  const [leadSearch,setLeadSearch]=useState("");
   const [blockMode,setBlockMode]=useState(false);
   const [agendaFilter,setAgendaFilter]=useState("all"); // "all" | closer unit
   const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
@@ -636,7 +637,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
 `:""}Reunião cadastrada no CRM ✅`;
       const waUrl=`https://wa.me/${closerPhone}?text=${encodeURIComponent(msg)}`;
       window.open(waUrl,"_blank");
-      setBookModal(null);setBookForm({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
+      setBookModal(null);setBookForm({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});setLeadSearch("");
     } else alert("Erro ao agendar: "+(error.message||"verifique os dados."));
     setSaving(false);
   };
@@ -954,8 +955,20 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
                 ))}
               </div>
             </div>}
-            <Sel label="Lead *" value={bookForm.lead_id} onChange={e=>setBookForm(p=>({...p,lead_id:e.target.value}))}
-              options={[{value:"",label:"Selecione o lead..."},...availLeads.filter(l=>!bookForm.closer_unit||l.unit===bookForm.closer_unit||!l.unit).map(l=>({value:l.id,label:`${l.name} — ${l.unit?UNITS.find(u=>u.id===l.unit)?.label||"":""}`}))]}/>
+            <div>
+              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Lead *</span>
+              <input value={leadSearch} onChange={e=>setLeadSearch(e.target.value)} placeholder="🔍 Buscar lead pelo nome..." autoFocus
+                style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",marginBottom:6}}
+                onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+              <select value={bookForm.lead_id} onChange={e=>setBookForm(p=>({...p,lead_id:e.target.value}))}
+                style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer",maxHeight:200}}>
+                <option value="">Selecione o lead...</option>
+                {availLeads
+                  .filter(l=>!bookForm.closer_unit||l.unit===bookForm.closer_unit||!l.unit)
+                  .filter(l=>!leadSearch||l.name.toLowerCase().includes(leadSearch.toLowerCase()))
+                  .map(l=>(<option key={l.id} value={l.id}>{l.name} — {l.unit?UNITS.find(u=>u.id===l.unit)?.label||"":"sem unidade"}</option>))}
+              </select>
+            </div>
             <div>
               <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Tipo de encontro</span>
               <div style={{display:"flex",gap:8}}>
