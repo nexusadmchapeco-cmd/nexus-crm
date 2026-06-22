@@ -1899,6 +1899,188 @@ function WhatsAppTab({lead, mob}) {
   );
 }
 
+/* ─── ORÇAMENTO TAB ──────────────────────────────────────────────── */
+function OrcamentoTab({lead,mob}) {
+  const [pgto,setPgto]=useState("avista");
+  const [form,setForm]=useState({modulo:"",duracao:"",matricula:"",material:"",total:"",parcela:"",formapgto:"Cartão recorrente",obs:""});
+  const [gerado,setGerado]=useState(false);
+  const canvasRef=useRef(null);
+  const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+  const gerar=()=>{
+    const canvas=canvasRef.current;
+    if(!canvas)return;
+    const W=560,PAD=32;
+    const linhas=[
+      {label:"Nome",valor:lead.name||"—"},
+      {label:"Módulo de início",valor:form.modulo||"—"},
+      {label:"Duração do curso",valor:form.duracao||"—"},
+      {label:"Valor da matrícula",valor:form.matricula||"—"},
+      {label:"1º material didático",valor:form.material||"—"},
+      pgto==="avista"
+        ?{label:"Valor total do curso",valor:form.total||"—"}
+        :{label:"Parcela mensal",valor:`${form.parcela||"—"} · ${form.formapgto}`},
+    ];
+    if(form.obs)linhas.push({label:"Observações",valor:form.obs,multi:true});
+
+    const ROW_H=52,HEADER_H=100,FOOTER_H=48;
+    const obsLines=form.obs?Math.ceil(form.obs.length/52):0;
+    const obsExtra=obsLines>1?(obsLines-1)*18:0;
+    const H=HEADER_H+linhas.length*ROW_H+obsExtra+FOOTER_H+16;
+    canvas.width=W;canvas.height=H;
+
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#ffffff";ctx.fillRect(0,0,W,H);
+
+    const img=new Image();
+    img.onload=()=>{
+      const ratio=img.width/img.height;
+      const logoH=52,logoW=logoH*ratio;
+      ctx.drawImage(img,PAD,18,logoW,logoH);
+
+      ctx.font="400 12px system-ui,sans-serif";
+      ctx.fillStyle="#999";
+      ctx.textAlign="right";
+      ctx.fillText("PROPOSTA COMERCIAL",W-PAD,42);
+      const dt=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"});
+      ctx.fillText(dt,W-PAD,58);
+      ctx.textAlign="left";
+
+      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,82,W-PAD*2,2);
+
+      let y=98;
+      linhas.forEach((l,i)=>{
+        const obsH=l.multi?Math.max(ROW_H,ROW_H+(Math.ceil((l.valor||"").length/52)-1)*18):ROW_H;
+        if(i%2===0){ctx.fillStyle="#f8f8f8";ctx.fillRect(PAD-6,y-8,W-(PAD-6)*2,obsH);}
+        ctx.font="500 11px system-ui,sans-serif";ctx.fillStyle="#aaa";
+        ctx.fillText(l.label.toUpperCase(),PAD,y+8);
+        ctx.font="500 15px system-ui,sans-serif";ctx.fillStyle="#111";
+        if(l.multi&&(l.valor||"").length>52){
+          const words=(l.valor||"").split(" ");let line="",ly=y+26;
+          words.forEach(w=>{
+            const test=line+w+" ";
+            ctx.font="400 14px system-ui,sans-serif";
+            if(ctx.measureText(test).width>W-PAD*2&&line){ctx.fillText(line.trim(),PAD,ly);ly+=18;line=w+" ";}
+            else line=test;
+          });
+          if(line)ctx.fillText(line.trim(),PAD,ly);
+        } else {ctx.fillText(l.valor||"—",PAD,y+26);}
+        y+=obsH;
+      });
+
+      ctx.fillStyle="#e85d20";ctx.fillRect(0,H-FOOTER_H,W,FOOTER_H);
+      ctx.font="400 12px system-ui,sans-serif";ctx.fillStyle="#fff";ctx.textAlign="center";
+      ctx.fillText("Nexus English Center · nexusenglishcenter.com.br",W/2,H-FOOTER_H+28);
+      ctx.textAlign="left";
+      setGerado(true);
+    };
+    img.onerror=()=>{
+      // fallback sem logo
+      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,82,W-PAD*2,2);
+      ctx.font="700 20px system-ui,sans-serif";ctx.fillStyle="#e85d20";
+      ctx.fillText("NEXUS ENGLISH CENTER",PAD,52);
+      setGerado(true);
+    };
+    img.src="/logo.png";
+  };
+
+  const baixar=()=>{
+    const canvas=canvasRef.current;if(!canvas)return;
+    const a=document.createElement("a");
+    a.download=`orcamento_${(lead.name||"lead").replace(/\s+/g,"_")}.png`;
+    a.href=canvas.toDataURL("image/png");a.click();
+  };
+
+  const compartilhar=async()=>{
+    const canvas=canvasRef.current;if(!canvas)return;
+    canvas.toBlob(async blob=>{
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[new File([blob],"orcamento.png",{type:"image/png"})]})){
+        await navigator.share({files:[new File([blob],"orcamento.png",{type:"image/png"})],title:"Orçamento Nexus"});
+      } else {baixar();}
+    },"image/png");
+  };
+
+  const iStyle={width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"10px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  const lStyle={display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5};
+
+  return (
+    <div style={{display:"grid",gap:14}}>
+      <div style={{background:T.accentLight,border:"1px solid rgba(232,93,32,.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:T.accent,fontWeight:600}}>
+        💰 Preencha os dados e gere o orçamento em PNG para enviar pelo WhatsApp
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:12}}>
+        <label style={{display:"block"}}>
+          <span style={lStyle}>Módulo de início</span>
+          <input style={iStyle} value={form.modulo} onChange={e=>f("modulo",e.target.value)} placeholder="Ex: Starter A1" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+        <label style={{display:"block"}}>
+          <span style={lStyle}>Duração do curso</span>
+          <input style={iStyle} value={form.duracao} onChange={e=>f("duracao",e.target.value)} placeholder="Ex: 18 meses" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+        <label style={{display:"block"}}>
+          <span style={lStyle}>Valor da matrícula</span>
+          <input style={iStyle} value={form.matricula} onChange={e=>f("matricula",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+        <label style={{display:"block"}}>
+          <span style={lStyle}>1º material didático</span>
+          <input style={iStyle} value={form.material} onChange={e=>f("material",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+      </div>
+
+      <div>
+        <span style={lStyle}>Forma de pagamento</span>
+        <div style={{display:"flex",gap:8}}>
+          {[["avista","À vista"],["parcelado","Parcelado"]].map(([id,lbl])=>(
+            <button key={id} type="button" onClick={()=>setPgto(id)} className="tap"
+              style={{flex:1,background:pgto===id?T.accent:"transparent",color:pgto===id?"white":T.muted,border:`1.5px solid ${pgto===id?T.accent:T.border}`,borderRadius:10,padding:"10px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {pgto==="avista"&&(
+        <label style={{display:"block"}}>
+          <span style={lStyle}>Valor total do curso</span>
+          <input style={iStyle} value={form.total} onChange={e=>f("total",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+      )}
+      {pgto==="parcelado"&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <label style={{display:"block"}}>
+            <span style={lStyle}>Valor da parcela</span>
+            <input style={iStyle} value={form.parcela} onChange={e=>f("parcela",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+          </label>
+          <label style={{display:"block"}}>
+            <span style={lStyle}>Forma de pagamento</span>
+            <select style={{...iStyle,cursor:"pointer"}} value={form.formapgto} onChange={e=>f("formapgto",e.target.value)}>
+              <option>Cartão recorrente</option>
+              <option>Boleto</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      <label style={{display:"block"}}>
+        <span style={lStyle}>Observações importantes</span>
+        <textarea style={{...iStyle,resize:"vertical",minHeight:64}} value={form.obs} onChange={e=>f("obs",e.target.value)} placeholder="Ex: Desconto válido até sexta-feira..." onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+      </label>
+
+      <Btn onClick={gerar} full>📄 Gerar orçamento</Btn>
+
+      <canvas ref={canvasRef} style={{width:"100%",borderRadius:10,border:`1px solid ${T.border}`,display:gerado?"block":"none"}}/>
+
+      {gerado&&(
+        <div style={{display:"flex",gap:8}}>
+          <Btn onClick={baixar} full variant="ghost">⬇ Baixar PNG</Btn>
+          <Btn onClick={compartilhar} full>📤 Compartilhar</Btn>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── LEAD MODAL ─────────────────────────────────────────────────── */
 function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [tab,setTab]=useState("info"),[editing,setEditing]=useState(!lead.unit);
@@ -1942,7 +2124,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
         ))}
       </div>
       <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,marginBottom:18}}>
-        {[["info","Infos"],["historico","Histórico"],["whatsapp","💬 WhatsApp"],["followup","Follow-up"]].map(([id,lbl])=>(
+        {[["info","Infos"],["historico","Histórico"],["whatsapp","💬 WhatsApp"],["followup","Follow-up"],["orcamento","💰 Orçamento"]].map(([id,lbl])=>(
           <button key={id} onClick={()=>setTab(id)} className="tap"
             style={{flex:1,background:"none",border:"none",borderBottom:tab===id?`2px solid ${T.accent}`:"2px solid transparent",padding:"10px 8px",fontSize:14,fontWeight:600,color:tab===id?T.accent:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:-1}}>
             {lbl}
@@ -2185,6 +2367,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
           </div>
         </div>
       )}
+      {tab==="orcamento"&&<OrcamentoTab lead={lead} mob={mob}/>}
       {/* Concluir follow-up modal */}
       {concluiModal&&(
         <div onClick={e=>e.target===e.currentTarget&&setConcluiModal(false)}
