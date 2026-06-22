@@ -2647,7 +2647,7 @@ function Propostas({leads,mob}) {
     const subtitulo=tipo==="filho"&&form.resp?`Responsável: ${form.resp}`:`Proposta personalizada · ${unidade}`;
     const totalMeses=NIVEIS_PROP.slice(moduloIdx).reduce((s,n)=>s+n.meses,0);
     const isAvista=pgtoMode==="avista";
-    const HDR=190,JORNADA=172,FEAT_H=132,VAL_H=isAvista?140:(data1?172:150),OBS_H=obs?52:0,FOOTER_H=46;
+    const HDR=190,JORNADA=185,FEAT_H=132,VAL_H=isAvista?140:(data1?172:150),OBS_H=obs?52:0,FOOTER_H=46;
     const H=HDR+JORNADA+FEAT_H+VAL_H+OBS_H+FOOTER_H;
     canvas.width=W*SCALE; canvas.height=H*SCALE;
     canvas.style.width=W+"px"; canvas.style.height=H+"px";
@@ -2703,41 +2703,59 @@ function Propostas({leads,mob}) {
         }
 
         // Círculo do nível
-        const r=isPast?7:isStart?11:9;
+        const r=isPast?7:isStart?14:9;
+        // Para o início: anel externo pulsante
+        if(isStart){
+          // anel externo suave
+          ctx.beginPath(); ctx.arc(dotX,dotY,r+6,0,Math.PI*2);
+          ctx.fillStyle="rgba(232,93,32,.12)"; ctx.fill();
+          // anel médio
+          ctx.beginPath(); ctx.arc(dotX,dotY,r+3,0,Math.PI*2);
+          ctx.fillStyle="rgba(232,93,32,.22)"; ctx.fill();
+        }
         ctx.beginPath(); ctx.arc(dotX,dotY,r,0,Math.PI*2);
-        ctx.fillStyle=isPast?"#e0e0e0":isStart?"#e85d20":"rgba(232,93,32,.2)";
+        ctx.fillStyle=isPast?"#e0e0e0":isStart?"#e85d20":"rgba(232,93,32,.15)";
         ctx.fill();
+        if(isStart){
+          // contorno branco interno
+          ctx.strokeStyle="#fff"; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.arc(dotX,dotY,r,0,Math.PI*2); ctx.stroke();
+        }
         if(!isPast&&!isStart){ ctx.strokeStyle="#e85d20"; ctx.lineWidth=1.5; ctx.stroke(); }
 
         // Letra dentro do círculo
-        ctx.font=`${isStart?"700":"500"} ${isStart?11:10}px -apple-system,sans-serif`;
+        ctx.font=`${isStart?"700":"500"} ${isStart?13:10}px -apple-system,sans-serif`;
         ctx.fillStyle=isPast?"#bbb":isStart?"#fff":"#e85d20";
         ctx.textAlign="center";
         ctx.fillText(n.label[0],dotX,dotY+4);
         ctx.textAlign="left";
 
         // Label acima do círculo
-        ctx.font=`${isStart?"700":"500"} ${isStart?13:11}px -apple-system,sans-serif`;
-        ctx.fillStyle=isPast?"#bbb":isStart?"#e85d20":"#333";
+        ctx.font=`${isStart?"700":"500"} ${isStart?14:11}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#bbb":isStart?"#e85d20":"#444";
         ctx.textAlign="center";
-        ctx.fillText(n.label,dotX,tlY-14);
+        ctx.fillText(n.label,dotX,tlY-22);
         ctx.textAlign="left";
 
         // Meses abaixo
-        ctx.font="400 10px -apple-system,sans-serif";
-        ctx.fillStyle=isPast?"#ccc":"#888";
+        ctx.font=`${isStart?"500":"400"} ${isStart?11:10}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#ccc":isStart?"#e85d20":"#888";
         ctx.textAlign="center";
-        ctx.fillText(`${n.meses} meses`,dotX,tlY+28);
+        ctx.fillText(`${n.meses} meses`,dotX,tlY+32);
         ctx.textAlign="left";
 
         // Badge "Início aqui" para o módulo selecionado
         if(isStart){
-          const bw=64,bh=16,bx=dotX-bw/2,by=tlY-44;
-          ctx.fillStyle="#e85d20"; rr(bx,by,bw,bh,5,"#e85d20");
-          ctx.font="500 9px -apple-system,sans-serif"; ctx.fillStyle="#fff";
-          ctx.textAlign="center"; ctx.fillText("INÍCIO AQUI",dotX,by+11); ctx.textAlign="left";
+          const bw=72,bh=18,bx=dotX-bw/2,by=tlY-58;
+          // linha vertical conectando badge ao círculo
+          ctx.strokeStyle="#e85d20"; ctx.lineWidth=1.5; ctx.globalAlpha=.4;
+          ctx.beginPath(); ctx.moveTo(dotX,by+bh+5); ctx.lineTo(dotX,dotY-r-6); ctx.stroke();
+          ctx.globalAlpha=1;
+          rr(bx,by,bw,bh,6,"#e85d20");
+          ctx.font="600 9px -apple-system,sans-serif"; ctx.fillStyle="#fff";
+          ctx.textAlign="center"; ctx.fillText("INÍCIO AQUI",dotX,by+12); ctx.textAlign="left";
           // seta pra baixo
-          ctx.beginPath(); ctx.moveTo(dotX-4,by+bh); ctx.lineTo(dotX+4,by+bh); ctx.lineTo(dotX,by+bh+5); ctx.closePath();
+          ctx.beginPath(); ctx.moveTo(dotX-5,by+bh); ctx.lineTo(dotX+5,by+bh); ctx.lineTo(dotX,by+bh+6); ctx.closePath();
           ctx.fillStyle="#e85d20"; ctx.fill();
         }
       });
