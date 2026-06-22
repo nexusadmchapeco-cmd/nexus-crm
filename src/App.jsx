@@ -2618,7 +2618,8 @@ function Propostas({leads,mob}) {
   const [tipo,setTipo]=useState("individual");
   const [leadSel,setLeadSel]=useState(null);
   const [moduloIdx,setModuloIdx]=useState(0);
-  const [form,setForm]=useState({mes:"",matr:"",material:"",parcela:"",data1parcela:"",pgto:"Cartão recorrente",obs:"",filho:"",resp:""});
+  const [pgtoMode,setPgtoMode]=useState("parcelado");
+  const [form,setForm]=useState({mes:"",matr:"",material:"",parcela:"",data1parcela:"",total:"",pgto:"Cartão recorrente",obs:"",filho:"",resp:""});
   const [gerado,setGerado]=useState(false);
   const canvasRef=useRef(null);
   const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
@@ -2638,64 +2639,97 @@ function Propostas({leads,mob}) {
     const mes=form.mes||mesesOpts[0];
     const matr=form.matr?`R$ ${form.matr}`:"—";
     const parcela=form.parcela?`R$ ${form.parcela}`:"—";
+    const totalCurso=form.total?`R$ ${form.total}`:"—";
     const data1=fmtData(form.data1parcela);
     const material=form.material?`R$ ${form.material}`:"—";
     const obs=form.obs;
     const nomeDisplay=tipo==="filho"&&form.filho?form.filho:nome;
     const subtitulo=tipo==="filho"&&form.resp?`Responsável: ${form.resp}`:`Proposta personalizada · ${unidade}`;
     const totalMeses=NIVEIS_PROP.slice(moduloIdx).reduce((s,n)=>s+n.meses,0);
-    const HDR=196,JORNADA=178,FEAT_H=158,VAL_H=data1?175:155,OBS_H=obs?56:0,FOOTER_H=48;
+    const isAvista=pgtoMode==="avista";
+    const HDR=190,JORNADA=172,FEAT_H=132,VAL_H=isAvista?140:(data1?172:150),OBS_H=obs?52:0,FOOTER_H=46;
     const H=HDR+JORNADA+FEAT_H+VAL_H+OBS_H+FOOTER_H;
     canvas.width=W*SCALE; canvas.height=H*SCALE;
     canvas.style.width=W+"px"; canvas.style.height=H+"px";
     const ctx=canvas.getContext("2d"); ctx.scale(SCALE,SCALE);
     const rr=(x,y,w,h,r,fill)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();if(fill!==undefined){ctx.fillStyle=fill;ctx.fill();}};
+    // HEADER — sem bolinhas decorativas
     ctx.fillStyle="#111"; ctx.fillRect(0,0,W,HDR);
-    ctx.fillStyle="#e85d20"; ctx.globalAlpha=.85; ctx.beginPath(); ctx.arc(W-55,45,52,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle="#7a2d0c"; ctx.globalAlpha=.55; ctx.beginPath(); ctx.arc(W-38,108,36,0,Math.PI*2); ctx.fill();
-    ctx.globalAlpha=1;
     const logoImg=new Image();
-    logoImg.onload=()=>{const lh=30,lw=lh*(logoImg.width/logoImg.height);ctx.drawImage(logoImg,28,20,lw,lh);drawRest();};
-    logoImg.onerror=()=>{ctx.font="700 18px -apple-system,sans-serif";ctx.fillStyle="#fff";ctx.fillText("NEXUS",28,42);drawRest();};
+    logoImg.onload=()=>{const lh=30,lw=lh*(logoImg.width/logoImg.height);ctx.drawImage(logoImg,28,18,lw,lh);drawRest();};
+    logoImg.onerror=()=>{ctx.font="700 18px -apple-system,sans-serif";ctx.fillStyle="#fff";ctx.fillText("NEXUS",28,40);drawRest();};
     logoImg.src="/logo.png";
     function drawRest(){
-      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("PROPOSTA PERSONALIZADA PARA",28,74);
-      ctx.font=`700 ${nomeDisplay.length>18?26:32}px -apple-system,sans-serif`; ctx.fillStyle="#fff"; ctx.fillText(nomeDisplay,28,112);
-      ctx.font="400 12px -apple-system,sans-serif"; ctx.fillStyle="#999"; ctx.fillText(subtitulo,28,134);
-      rr(28,148,148,30,6,"#e85d20"); ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(`Início: ${mes}`,40,167);
-      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#666"; ctx.textAlign="right"; ctx.fillText(unidade,W-28,167); ctx.textAlign="left";
+      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("PROPOSTA PERSONALIZADA PARA",28,68);
+      ctx.font=`700 ${nomeDisplay.length>18?26:32}px -apple-system,sans-serif`; ctx.fillStyle="#fff"; ctx.fillText(nomeDisplay,28,106);
+      ctx.font="400 12px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText(subtitulo,28,126);
+      rr(28,140,148,28,6,"#e85d20"); ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(`Início: ${mes}`,40,158);
+      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#555"; ctx.textAlign="right"; ctx.fillText(unidade,W-28,158); ctx.textAlign="left";
       let y=HDR;
+      // JORNADA
       ctx.fillStyle="#f5f5f5"; ctx.fillRect(0,y,W,JORNADA);
-      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("A JORNADA NO CURSO",28,y+20);
-      const cw=(W-56-18)/4,ch=JORNADA-52;
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("A JORNADA NO CURSO",28,y+18);
+      const cw=(W-56-18)/4,ch=JORNADA-46;
       NIVEIS_PROP.forEach((n,i)=>{
         const isPast=i<moduloIdx,isStart=i===moduloIdx;
-        const cx=28+i*(cw+6),cy=y+28;
-        const bg=isPast?"#e0e0e0":isStart?"#e85d20":i===3?"#7a2d0c":"#222";
+        const cx=28+i*(cw+6),cy=y+26;
+        // cores mais suaves: cinza claro para não-início, sem #222
+        const bg=isPast?"#dedede":isStart?"#e85d20":i===3?"#7a2d0c":"#4a4a4a";
         rr(cx,cy,cw,ch,8,bg);
-        ctx.font="700 12px -apple-system,sans-serif"; ctx.fillStyle=isPast?"#999":"#fff"; ctx.fillText(n.label,cx+10,cy+18);
-        ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle=isPast?"#bbb":isStart?"rgba(255,255,255,.9)":"#e85d20"; ctx.fillText(`${n.meses} meses`,cx+10,cy+31);
-        if(isStart){rr(cx+cw-50,cy+4,46,14,4,"rgba(255,255,255,.2)");ctx.font="500 8px -apple-system,sans-serif";ctx.fillStyle="#fff";ctx.textAlign="center";ctx.fillText("INÍCIO AQUI",cx+cw-27,cy+13);ctx.textAlign="left";}
-        if(!isPast&&ch>55){ctx.font="400 9px -apple-system,sans-serif";ctx.fillStyle=isStart?"rgba(255,255,255,.75)":"rgba(255,255,255,.6)";const words=n.desc.split(" ");let line="",ly=cy+46;words.forEach(w=>{const t=line+w+" ";if(ctx.measureText(t).width>cw-14&&line){ctx.fillText(line.trim(),cx+10,ly);ly+=12;line=w+" ";}else line=t;});if(line)ctx.fillText(line.trim(),cx+10,ly);}
-        if(isPast){ctx.strokeStyle="#bbb";ctx.lineWidth=1.2;ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(cx+6,cy+ch/2);ctx.lineTo(cx+cw-6,cy+ch/2);ctx.stroke();ctx.globalAlpha=1;}
+        ctx.font="700 12px -apple-system,sans-serif"; ctx.fillStyle=isPast?"#aaa":"#fff"; ctx.fillText(n.label,cx+10,cy+17);
+        ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle=isPast?"#bbb":isStart?"rgba(255,255,255,.9)":"#e85d20"; ctx.fillText(`${n.meses} meses`,cx+10,cy+30);
+        // Badge com mais espaço
+        if(isStart){
+          const badgeW=54,badgeH=14;
+          rr(cx+cw-badgeW-8,cy+6,badgeW,badgeH,4,"rgba(255,255,255,.22)");
+          ctx.font="500 8px -apple-system,sans-serif"; ctx.fillStyle="#fff";
+          ctx.textAlign="center"; ctx.fillText("INÍCIO AQUI",cx+cw-8-badgeW/2,cy+15); ctx.textAlign="left";
+        }
+        if(!isPast&&ch>52){ctx.font="400 9px -apple-system,sans-serif";ctx.fillStyle=isStart?"rgba(255,255,255,.75)":"rgba(255,255,255,.55)";const words=n.desc.split(" ");let line="",ly=cy+44;words.forEach(w=>{const t=line+w+" ";if(ctx.measureText(t).width>cw-14&&line){ctx.fillText(line.trim(),cx+10,ly);ly+=12;line=w+" ";}else line=t;});if(line)ctx.fillText(line.trim(),cx+10,ly);}
+        if(isPast){ctx.strokeStyle="#c0c0c0";ctx.lineWidth=1;ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(cx+6,cy+ch/2);ctx.lineTo(cx+cw-6,cy+ch/2);ctx.stroke();ctx.globalAlpha=1;}
       });
       const durStr=`Duração total: ${totalMeses} meses`;
       ctx.font="500 10px -apple-system,sans-serif";
       const durW=ctx.measureText(durStr).width+20;
-      rr(W-28-durW,y+JORNADA-24,durW,16,5,"#111"); ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.fillText(durStr,W-28-durW/2,y+JORNADA-13); ctx.textAlign="left";
+      rr(W-28-durW,y+JORNADA-22,durW,15,5,"#333"); ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.fillText(durStr,W-28-durW/2,y+JORNADA-11); ctx.textAlign="left";
       y+=JORNADA;
+      // FEATURES — mais compactas, linha única por item
       ctx.fillStyle="#fff"; ctx.fillRect(0,y,W,FEAT_H);
-      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("O QUE ESTÁ INCLUÍDO",28,y+20);
-      const fw=(W-56-10)/2,fh=52;
-      FEATURES_PROP.forEach((ft,i)=>{const fx=28+(i%2)*(fw+10),fy=y+28+Math.floor(i/2)*(fh+6);rr(fx,fy,fw,fh,8,"#f7f7f7");ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle="#111";ctx.fillText(ft.title,fx+12,fy+18);ctx.font="400 10px -apple-system,sans-serif";ctx.fillStyle="#888";ctx.fillText(ft.sub,fx+12,fy+32);});
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("O QUE ESTÁ INCLUÍDO",28,y+18);
+      const fw=(W-56-10)/2,fh=40;
+      FEATURES_PROP.forEach((ft,i)=>{
+        const fx=28+(i%2)*(fw+10),fy=y+26+Math.floor(i/2)*(fh+6);
+        rr(fx,fy,fw,fh,7,"#f7f7f7");
+        // Dot laranja
+        ctx.fillStyle="#e85d20"; ctx.beginPath(); ctx.arc(fx+14,fy+fh/2,3,0,Math.PI*2); ctx.fill();
+        ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#111"; ctx.fillText(ft.title,fx+24,fy+16);
+        ctx.font="400 10px -apple-system,sans-serif"; ctx.fillStyle="#999"; ctx.fillText(ft.sub,fx+24,fy+29);
+      });
       y+=FEAT_H;
+      // VALORES
       ctx.fillStyle="#1a1a1a"; ctx.fillRect(0,y,W,VAL_H);
-      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("CONDIÇÃO ESPECIAL",28,y+22);
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("CONDIÇÃO ESPECIAL",28,y+20);
       const vbW=W/2-34;
-      rr(28,y+30,vbW,VAL_H-46,10,"#e85d20"); ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.7)"; ctx.fillText("MATRÍCULA",40,y+48); ctx.font="700 30px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(matr,40,y+84); ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillText(`Material: ${material}`,40,y+104);
+      // Matrícula (sempre aparece)
+      rr(28,y+28,vbW,VAL_H-42,10,"#e85d20");
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.7)"; ctx.fillText("MATRÍCULA",40,y+44);
+      ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(matr,40,y+78);
+      ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillText(`Material: ${material}`,40,y+96);
       const vx=W/2+6;
-      rr(vx,y+30,vbW,VAL_H-46,10,"#2a2a2a"); ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText("MENSALIDADE",vx+12,y+48); ctx.font="700 30px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(parcela,vx+12,y+84); ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText(form.pgto,vx+12,y+104);
-      if(data1){rr(vx+12,y+116,vbW-24,18,5,"#333");ctx.font="500 10px -apple-system,sans-serif";ctx.fillStyle="#e85d20";ctx.textAlign="center";ctx.fillText(`1ª parcela: ${data1}`,vx+12+(vbW-24)/2,y+128);ctx.textAlign="left";}
+      if(isAvista){
+        // À vista — bloco único com valor total
+        rr(vx,y+28,vbW,VAL_H-42,10,"#2a2a2a");
+        ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText("VALOR TOTAL DO CURSO",vx+12,y+44);
+        ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(totalCurso,vx+12,y+78);
+        ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("Pagamento à vista",vx+12,y+96);
+      } else {
+        // Parcelado
+        rr(vx,y+28,vbW,VAL_H-42,10,"#2a2a2a");
+        ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText("MENSALIDADE",vx+12,y+44);
+        ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(parcela,vx+12,y+78);
+        ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText(form.pgto,vx+12,y+96);
+        if(data1){rr(vx+12,y+106,vbW-24,17,5,"#333");ctx.font="500 10px -apple-system,sans-serif";ctx.fillStyle="#e85d20";ctx.textAlign="center";ctx.fillText(`1ª parcela: ${data1}`,vx+12+(vbW-24)/2,y+118);ctx.textAlign="left";}
+      }
       y+=VAL_H;
       if(obs){ctx.fillStyle="#fff8f5";ctx.fillRect(0,y,W,OBS_H);ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle="#c44a15";ctx.fillText("★  "+obs,28,y+OBS_H/2+5);y+=OBS_H;}
       ctx.fillStyle="#e85d20"; ctx.fillRect(0,y,W,FOOTER_H);
@@ -2793,22 +2827,40 @@ function Propostas({leads,mob}) {
           </div>
 
           {/* Valores */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <label style={{display:"block"}}><span style={lStyle}>Matrícula (R$)</span><input style={iStyle} value={form.matr} onChange={e=>ff("matr",e.target.value)} placeholder="350,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
             <label style={{display:"block"}}><span style={lStyle}>Material (R$)</span><input style={iStyle} value={form.material} onChange={e=>ff("material",e.target.value)} placeholder="120,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-            <label style={{display:"block"}}>
-              <span style={lStyle}>Pagamento</span>
-              <select style={{...iStyle,cursor:"pointer"}} value={form.pgto} onChange={e=>ff("pgto",e.target.value)}>
-                <option>Cartão recorrente</option>
-                <option>Boleto</option>
-              </select>
-            </label>
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <label style={{display:"block"}}><span style={lStyle}>Valor da parcela (R$)</span><input style={iStyle} value={form.parcela} onChange={e=>ff("parcela",e.target.value)} placeholder="359,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
-            <label style={{display:"block"}}><span style={lStyle}>Data da 1ª parcela</span><input type="date" style={iStyle} value={form.data1parcela} onChange={e=>ff("data1parcela",e.target.value)} onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+          <div>
+            <span style={lStyle}>Forma de pagamento do curso</span>
+            <div style={{display:"flex",gap:8}}>
+              {[["parcelado","Parcelado"],["avista","À vista"]].map(([id,lbl])=>(
+                <button key={id} type="button" onClick={()=>setPgtoMode(id)} className="tap"
+                  style={{flex:1,background:pgtoMode===id?T.accent:"transparent",color:pgtoMode===id?"white":T.muted,border:`1.5px solid ${pgtoMode===id?T.accent:T.border}`,borderRadius:10,padding:"9px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {pgtoMode==="parcelado"&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              <label style={{display:"block"}}><span style={lStyle}>Valor da parcela (R$)</span><input style={iStyle} value={form.parcela} onChange={e=>ff("parcela",e.target.value)} placeholder="359,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+              <label style={{display:"block"}}><span style={lStyle}>Data da 1ª parcela</span><input type="date" style={iStyle} value={form.data1parcela} onChange={e=>ff("data1parcela",e.target.value)} onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+              <label style={{display:"block"}}>
+                <span style={lStyle}>Pagamento</span>
+                <select style={{...iStyle,cursor:"pointer"}} value={form.pgto} onChange={e=>ff("pgto",e.target.value)}>
+                  <option>Cartão recorrente</option>
+                  <option>Boleto</option>
+                </select>
+              </label>
+            </div>
+          )}
+
+          {pgtoMode==="avista"&&(
+            <label style={{display:"block"}}><span style={lStyle}>Valor total do curso (R$)</span><input style={iStyle} value={form.total} onChange={e=>ff("total",e.target.value)} placeholder="5.490,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+          )}
 
           <label style={{display:"block"}}>
             <span style={lStyle}>Observação especial</span>
