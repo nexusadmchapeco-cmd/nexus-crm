@@ -593,8 +593,18 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     setSaving(true);
     const{date,time}=bookModal;
     const myCloserUnit=(userProfile?.units||[])[0]||null;
-    const chosenCloser=CLOSERS.find(c=>c.id===bookForm.closer_id)||CLOSERS.find(c=>c.unit===myCloserUnit)||CLOSERS.find(c=>c.unit===(leads.find(l=>l.id===bookForm.lead_id)?.unit))||CLOSERS[0];
-    const insertData={id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",unit:chosenCloser?.unit||null};
+    const selectedLead=leads.find(l=>l.id===bookForm.lead_id);
+    // Determine unit: closer selected by SDR > closer's own unit > lead's unit
+    let bookUnit=null;
+    if(bookForm.closer_id){
+      const c=CLOSERS.find(x=>x.id===bookForm.closer_id);
+      bookUnit=c?.unit||null;
+    } else if(myCloserUnit&&myCloserUnit!=="online"){
+      bookUnit=myCloserUnit;
+    } else {
+      bookUnit=selectedLead?.unit||null;
+    }
+    const insertData={id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",unit:bookUnit};
     // Don't insert closer_id as FK - just use unit for filtering
     const{data:insertedSlot,error}=await supabase.from("agenda").insert(insertData).select().single();
     if(error){console.error("Agenda insert error:",error);alert("Erro ao agendar: "+error.message+" (code: "+error.code+")");setSaving(false);return;}
@@ -609,7 +619,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
       await loadData();
       // Send WhatsApp notification to closer
       const lead=leads.find(l=>l.id===bookForm.lead_id);
-      const closerPhone=chosenCloser?.phone||(lead?.unit==="pf"?"5554999658474":"5549988971344");
+      const closerPhone=CLOSERS.find(c=>c.id===bookForm.closer_id)?.phone||(bookUnit==="pf"?"5554999658474":"5549988971344");
       const dateFormatted=new Date(date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
       const msg=`🗓 *Nova reunião agendada!*
 
