@@ -2647,7 +2647,7 @@ function Propostas({leads,mob}) {
     const subtitulo=tipo==="filho"&&form.resp?`Responsável: ${form.resp}`:`Proposta personalizada · ${unidade}`;
     const totalMeses=NIVEIS_PROP.slice(moduloIdx).reduce((s,n)=>s+n.meses,0);
     const isAvista=pgtoMode==="avista";
-    const HDR=190,JORNADA=185,FEAT_H=132,VAL_H=isAvista?140:(data1?172:150),OBS_H=obs?52:0,FOOTER_H=46;
+    const HDR=190,JORNADA=210,FEAT_H=132,VAL_H=isAvista?140:(data1?172:150),OBS_H=obs?52:0,FOOTER_H=46;
     const H=HDR+JORNADA+FEAT_H+VAL_H+OBS_H+FOOTER_H;
     canvas.width=W*SCALE; canvas.height=H*SCALE;
     canvas.style.width=W+"px"; canvas.style.height=H+"px";
@@ -2672,7 +2672,7 @@ function Propostas({leads,mob}) {
       ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("A JORNADA NO CURSO",28,y+18);
 
       const N=NIVEIS_PROP.length;
-      const tlY=y+44; // y da linha central
+      const tlY=y+90; // y da linha central — espaço suficiente pro badge acima
       const tlX1=28, tlX2=W-28;
       const tlW=tlX2-tlX1;
       const stepW=tlW/N;
