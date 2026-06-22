@@ -568,11 +568,15 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const isBlocked=(date,time)=>blocked.some(b=>b.date===date&&b.time===time);
   const getSlotsAt=(date,time)=>slots.filter(s=>{
     if(s.date!==date||s.time!==time)return false;
-    // Only show slot if lead is in allowed units
     if(!s.lead_id)return true;
+    // Show slot if lead is in allLeadsMap OR if slot has correct unit
     const l=allLeadsMap[s.lead_id];
-    if(!l)return false; // lead not in allowed map = not visible
-    return true;
+    if(l)return true;
+    // Fallback: show slot based on unit filter
+    const isAdmOrSdr2=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
+    if(isAdmOrSdr2)return true; // admin/sdr sees all
+    const myUnit2=(userProfile?.units||[])[0]||null;
+    return !myUnit2||s.unit===myUnit2;
   });
 
   const toggleBlock=async(date,time)=>{
@@ -617,6 +621,13 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
       const dateFormatadoHist=new Date(date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
       const histNote=`${bookForm.tipo==="experimental"?"🧪 Aula Experimental":"📅 Reunião"} agendada para ${dateFormatadoHist} às ${time}${bookForm.notes?` — Obs: ${bookForm.notes}`:""}`;
       await supabase.from("lead_history").insert({id:uid(),lead_id:bookForm.lead_id,type:"Reunião",note:histNote,date:new Date().toISOString()});
+      // Refresh allLeadsMap to include any new leads
+      const{data:freshLeads}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
+      const freshMap={};
+      const allowedU2=(userProfile?.units)||["pf","chape","online"];
+      const isAdm2=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
+      (freshLeads||[]).forEach(l=>{if(isAdm2||!l.unit||allowedU2.includes(l.unit))freshMap[l.id]=l;});
+      setAllLeadsMap(freshMap);
       await loadData();
       // Send WhatsApp notification to closer
       const lead=leads.find(l=>l.id===bookForm.lead_id);
