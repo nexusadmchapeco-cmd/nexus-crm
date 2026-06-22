@@ -515,13 +515,14 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const [selectedSlotLead,setSelectedSlotLead]=useState(null);
   const [mobDay,setMobDay]=useState(today()); // {date, time}
   const [blockMode,setBlockMode]=useState(false);
+  const [agendaFilter,setAgendaFilter]=useState("all"); // "all" | closer unit
   const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
   const [saving,setSaving]=useState(false);
 
   const weekDates=getWeekDates(weekBase);
   const workDates=getWeekDates(weekBase); // Mon(0)..Sat(5)
 
-  useEffect(()=>{ loadData(); setMobDay(workDates.includes(today())?today():workDates[0]); },[weekBase]);
+  useEffect(()=>{ loadData(); setMobDay(workDates.includes(today())?today():workDates[0]); },[weekBase,agendaFilter]);
   useEffect(()=>{
     (async()=>{
       const{data}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
@@ -547,6 +548,9 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     if(!isAdmOrSdr&&myUnit){
       sQuery=sQuery.eq("unit",myUnit);
       bQuery=bQuery.eq("unit",myUnit);
+    } else if(isAdmOrSdr&&agendaFilter!=="all"){
+      sQuery=sQuery.eq("unit",agendaFilter);
+      bQuery=bQuery.eq("unit",agendaFilter);
     }
     const[{data:s},{data:b}]=await Promise.all([sQuery,bQuery]);
     setSlots(s||[]);setBlocked(b||[]);setLoading(false);
@@ -662,6 +666,17 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
           <p style={{color:T.muted,fontSize:13,marginTop:3}}>Reuniões de fechamento · 30 min cada</p>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {/* Agenda filter for admin/sdr */}
+          {((userProfile?.role)==="admin"||(userProfile?.role)==="sdr")&&(
+            <div style={{display:"flex",gap:4,background:"#f0f0f0",borderRadius:10,padding:4,border:`1px solid ${T.border}`}}>
+              {[{id:"all",label:"📋 Todas"},{id:"pf",label:"🎯 Lucas PF"},{id:"chape",label:"🎯 Jaziel Chapecó"}].map(f=>(
+                <button key={f.id} onClick={()=>{setAgendaFilter(f.id);}} className="tap"
+                  style={{background:agendaFilter===f.id?T.accent:"transparent",color:agendaFilter===f.id?"white":T.muted,border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s",whiteSpace:"nowrap"}}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
           <button onClick={()=>setBlockMode(b=>!b)} className="tap"
             style={{background:blockMode?"rgba(239,68,68,.15)":"transparent",color:blockMode?"#f87171":T.muted,border:`1.5px solid ${blockMode?"rgba(239,68,68,.4)":T.border}`,borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
             {blockMode?"✕ Sair do modo bloqueio":"🔒 Fechar horários"}
