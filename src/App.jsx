@@ -3347,12 +3347,14 @@ export default function App() {
       const isAdmin=(profile?.role)==="admin";
       const filteredLd=(ld||[]).filter(l=>isAdmin||!l.unit||allowedUnits.includes(l.unit));
       if(cancelled)return;
-      if(cancelled)return;
+      // Build history map for O(1) lookup instead of O(n²)
+      const histMap={};
+      (hd||[]).forEach(h=>{if(!histMap[h.lead_id])histMap[h.lead_id]=[];histMap[h.lead_id].push({id:h.id,type:h.type,note:h.note,date:h.date});});
       setLeads(filteredLd.map(l=>({
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
         stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,matriculaMes:l.matricula_mes||null,valorMatricula:l.valor_matricula||l.valor_mensalidade||null,tipoVenda:l.tipo_venda||null,
         followUp:l.follow_up_date?{date:l.follow_up_date,note:l.follow_up_note||""}:null,
-        history:(hd||[]).filter(h=>h.lead_id===l.id).map(h=>({id:h.id,type:h.type,note:h.note,date:h.date})),
+        history:histMap[l.id]||[],
         unreadCount:unreadMap[l.id]||0,
       })));
       setDbLoading(false);
