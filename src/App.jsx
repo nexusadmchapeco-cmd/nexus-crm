@@ -525,8 +525,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const [mobDay,setMobDay]=useState(today()); // {date, time}
   const [blockMode,setBlockMode]=useState(false);
   const [agendaFilter,setAgendaFilter]=useState("all");
-  const [mobDay,setMobDay]=useState(today());
-  const [leadSearch,setLeadSearch]=useState("");
+    const [leadSearch,setLeadSearch]=useState("");
   const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
   const [saving,setSaving]=useState(false);
 
