@@ -532,7 +532,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const weekDates=getWeekDates(weekBase);
   const workDates=getWeekDates(weekBase); // Mon(0)..Sat(5)
 
-  useEffect(()=>{ loadData(); setMobDay(workDates.includes(today())?today():workDates[0]); },[weekBase]);
+  useEffect(()=>{ loadData(); setMobDay(workDates.includes(today())?today():workDates[0]); },[weekBase,agendaFilter]);
   useEffect(()=>{
     (async()=>{
       const{data}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
