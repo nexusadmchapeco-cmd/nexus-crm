@@ -605,10 +605,25 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   };
 
   const bookSlot=async()=>{
+    const isSdrAdm=(userProfile?.role)==="sdr"||(userProfile?.role)==="admin";
+    if(isSdrAdm&&!bookForm.closer_id){alert("Selecione a agenda do closer.");return;}
     if(!bookForm.lead_id){alert("Selecione um lead.");return;}
     setSaving(true);
     const{date,time}=bookModal;
-    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao"});
+    const role=userProfile?.role;
+    const selectedLead=leads.find(l=>l.id===bookForm.lead_id);
+    let bookUnit=null;
+    if(bookForm.closer_id){
+      bookUnit=CLOSERS.find(c=>c.id===bookForm.closer_id)?.unit||null;
+    } else if(role==="closer_pf"){
+      bookUnit=selectedLead?.unit==="chape"?"pf":(selectedLead?.unit||"pf");
+    } else if(role==="closer_chape"){
+      bookUnit="chape";
+    } else {
+      bookUnit=selectedLead?.unit||null;
+    }
+    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",unit:bookUnit});
+    if(error){alert("Erro ao agendar: "+error.message);setSaving(false);return;}
     if(!error){
       if(bookForm.tipo==="reuniao"){
         await supabase.from("leads").update({stage:"reuniao"}).eq("id",bookForm.lead_id);
