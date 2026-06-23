@@ -598,10 +598,12 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
       let q=supabase.from("agenda_blocked").delete().eq("date",date).eq("time",time);
       if(myUnit3)q=q.eq("unit",myUnit3);
       await q;
+      setBlocked(p=>p.filter(b=>!(b.date===date&&b.time===time)));
     } else {
-      await supabase.from("agenda_blocked").insert({id:uid(),date,time,unit:myUnit3||null});
+      const newBlock={id:uid(),date,time,unit:myUnit3||null};
+      await supabase.from("agenda_blocked").insert(newBlock);
+      setBlocked(p=>[...p,newBlock]);
     }
-    loadData();
   };
 
   const bookSlot=async()=>{
@@ -622,7 +624,8 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     } else {
       bookUnit=selectedLead?.unit||null;
     }
-    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",unit:bookUnit});
+    const insertedId=uid();
+    const{error}=await supabase.from("agenda").insert({id:insertedId,lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",unit:bookUnit});
     if(error){alert("Erro ao agendar: "+error.message);setSaving(false);return;}
     if(!error){
       if(bookForm.tipo==="reuniao"){
@@ -632,7 +635,9 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
       const dateFormatadoHist=new Date(date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
       const histNote=`${bookForm.tipo==="experimental"?"🧪 Aula Experimental":"📅 Reunião"} agendada para ${dateFormatadoHist} às ${time}${bookForm.notes?` — Obs: ${bookForm.notes}`:""}`;
       await supabase.from("lead_history").insert({id:uid(),lead_id:bookForm.lead_id,type:"Reunião",note:histNote,date:new Date().toISOString()});
-      await loadData();
+      // Update locally without reload
+      const newSlot={id:insertedId,lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",unit:bookUnit};
+      setSlots(p=>[...p,newSlot]);
       // Send WhatsApp notification to closer
       const lead=leads.find(l=>l.id===bookForm.lead_id);
       const closerPhone=CLOSERS.find(c=>c.id===bookForm.closer_id)?.phone||(bookUnit==="pf"?"5554999658474":"5549988971344");
@@ -660,7 +665,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
   const cancelSlot=async(id)=>{
     if(!window.confirm("Cancelar este agendamento?"))return;
     await supabase.from("agenda").update({status:"cancelado"}).eq("id",id);
-    loadData();
+    setSlots(p=>p.filter(s=>s.id!==id));
   };
 
   const confirmarSlot=async(id)=>{
@@ -668,7 +673,6 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
     const slot=slots.find(s=>s.id===id);
     if(slot?.lead_id){
       await supabase.from("leads").update({stage:"negociacao"}).eq("id",slot.lead_id);
-      // Auto-schedule 1° Retorno Reunião 24h after confirmation
       const next=new Date(Date.now()+24*60*60*1000);
       const dateStr=next.toISOString().split("T")[0];
       const timeStr=next.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
@@ -678,7 +682,8 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
         follow_up_note:"1° Retorno Reunião"
       }).eq("id",slot.lead_id);
     }
-    loadData();
+    // Update locally
+    setSlots(p=>p.map(s=>s.id===id?{...s,status:"confirmado"}:s));
   };
 
   const prevWeek=()=>{ const d=new Date(weekBase); d.setDate(d.getDate()-7); setWeekBase(d.toISOString().split("T")[0]); };
