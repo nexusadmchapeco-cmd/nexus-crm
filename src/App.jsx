@@ -523,16 +523,17 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const [allLeadsMap,setAllLeadsMap]=useState({});
   const [selectedSlotLead,setSelectedSlotLead]=useState(null);
   const [mobDay,setMobDay]=useState(today()); // {date, time}
-  const [leadSearch,setLeadSearch]=useState("");
   const [blockMode,setBlockMode]=useState(false);
-  const [agendaFilter,setAgendaFilter]=useState("all"); // "all" | closer unit
+  const [agendaFilter,setAgendaFilter]=useState("all");
+  const [mobDay,setMobDay]=useState(today());
+  const [leadSearch,setLeadSearch]=useState("");
   const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
   const [saving,setSaving]=useState(false);
 
   const weekDates=getWeekDates(weekBase);
   const workDates=getWeekDates(weekBase); // Mon(0)..Sat(5)
 
-  useEffect(()=>{ loadData(); setMobDay(workDates.includes(today())?today():workDates[0]); },[weekBase,agendaFilter]);
+  useEffect(()=>{ loadData(); setMobDay(workDates.includes(today())?today():workDates[0]); },[weekBase]);
   useEffect(()=>{
     (async()=>{
       const{data}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
@@ -550,9 +551,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     setLoading(true);
     const startD=workDates[0], endD=workDates[workDates.length-1];
     const isAdmOrSdr=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
-    const myCloserId=userProfile?.id||null;
     const myUnit=(userProfile?.units||[])[0]||null;
-    // Closers only see their own agenda (by closer_id or unit fallback)
     let sQuery=supabase.from("agenda").select("*").gte("date",startD).lte("date",endD).neq("status","cancelado");
     let bQuery=supabase.from("agenda_blocked").select("*").gte("date",startD).lte("date",endD);
     if(!isAdmOrSdr&&myUnit){
@@ -570,50 +569,31 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const getSlotsAt=(date,time)=>slots.filter(s=>{
     if(s.date!==date||s.time!==time)return false;
     if(!s.lead_id)return true;
-    // Show slot if lead is in allLeadsMap OR if slot has correct unit
     const l=allLeadsMap[s.lead_id];
     if(l)return true;
-    // Fallback: show slot based on unit filter
-    const isAdmOrSdr2=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
-    if(isAdmOrSdr2)return true; // admin/sdr sees all
+    const isAdmSdr2=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
+    if(isAdmSdr2)return true;
     const myUnit2=(userProfile?.units||[])[0]||null;
     return !myUnit2||s.unit===myUnit2;
   });
 
   const toggleBlock=async(date,time)=>{
-    const myUnit=(userProfile?.units||[])[0]||null;
+    const myUnit3=(userProfile?.units||[])[0]||null;
     if(isBlocked(date,time)){
       let q=supabase.from("agenda_blocked").delete().eq("date",date).eq("time",time);
-      if(myUnit)q=q.eq("unit",myUnit);
+      if(myUnit3)q=q.eq("unit",myUnit3);
       await q;
     } else {
-      await supabase.from("agenda_blocked").insert({id:uid(),date,time,unit:myUnit||null});
+      await supabase.from("agenda_blocked").insert({id:uid(),date,time,unit:myUnit3||null});
     }
     loadData();
   };
 
   const bookSlot=async()=>{
-    const isSdrOrAdm=(userProfile?.role)==="sdr"||(userProfile?.role)==="admin";
-    if(isSdrOrAdm&&!bookForm.closer_id){alert("Selecione a agenda do closer.");return;}
     if(!bookForm.lead_id){alert("Selecione um lead.");return;}
     setSaving(true);
     const{date,time}=bookModal;
-    const myCloserUnit=(userProfile?.units||[])[0]||null;
-    const selectedLead=leads.find(l=>l.id===bookForm.lead_id);
-    // Determine unit: closer selected by SDR > closer's own unit > lead's unit
-    let bookUnit=null;
-    if(bookForm.closer_id){
-      const c=CLOSERS.find(x=>x.id===bookForm.closer_id);
-      bookUnit=c?.unit||null;
-    } else if(myCloserUnit&&myCloserUnit!=="online"){
-      bookUnit=myCloserUnit;
-    } else {
-      bookUnit=selectedLead?.unit||null;
-    }
-    const insertData={id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao",unit:bookUnit};
-    // Don't insert closer_id as FK - just use unit for filtering
-    const{data:insertedSlot,error}=await supabase.from("agenda").insert(insertData).select().single();
-    if(error){console.error("Agenda insert error:",error);alert("Erro ao agendar: "+error.message+" (code: "+error.code+")");setSaving(false);return;}
+    const{error}=await supabase.from("agenda").insert({id:uid(),lead_id:bookForm.lead_id,date,time,notes:bookForm.notes||null,status:"agendado",tipo:bookForm.tipo||"reuniao"});
     if(!error){
       if(bookForm.tipo==="reuniao"){
         await supabase.from("leads").update({stage:"reuniao"}).eq("id",bookForm.lead_id);
@@ -622,13 +602,6 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
       const dateFormatadoHist=new Date(date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
       const histNote=`${bookForm.tipo==="experimental"?"🧪 Aula Experimental":"📅 Reunião"} agendada para ${dateFormatadoHist} às ${time}${bookForm.notes?` — Obs: ${bookForm.notes}`:""}`;
       await supabase.from("lead_history").insert({id:uid(),lead_id:bookForm.lead_id,type:"Reunião",note:histNote,date:new Date().toISOString()});
-      // Refresh allLeadsMap to include any new leads
-      const{data:freshLeads}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
-      const freshMap={};
-      const allowedU2=(userProfile?.units)||["pf","chape","online"];
-      const isAdm2=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
-      (freshLeads||[]).forEach(l=>{if(isAdm2||!l.unit||allowedU2.includes(l.unit))freshMap[l.id]=l;});
-      setAllLeadsMap(freshMap);
       await loadData();
       // Send WhatsApp notification to closer
       const lead=leads.find(l=>l.id===bookForm.lead_id);
@@ -650,7 +623,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
       const waUrl=`https://wa.me/${closerPhone}?text=${encodeURIComponent(msg)}`;
       window.open(waUrl,"_blank");
       setBookModal(null);setBookForm({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});setLeadSearch("");
-    } else alert("Erro ao agendar: "+(error.message||"verifique os dados."));
+    } else alert("Erro ao agendar.");
     setSaving(false);
   };
 
@@ -683,7 +656,7 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
   const goToday=()=>setWeekBase(today());
 
   const ts=today();
-  const todaySlots=slots.filter(s=>s.date===ts&&s.status!=="cancelado"&&(!s.lead_id||allLeadsMap[s.lead_id])).sort((a,b)=>a.time.localeCompare(b.time));
+  const todaySlots=slots.filter(s=>s.date===ts&&s.status!=="cancelado"&&(!s.lead_id||allLeadsMap[s.lead_id]||s.unit)).sort((a,b)=>a.time.localeCompare(b.time));
   const allowedUnitsAgenda=(userProfile?.units)||["pf","chape","online"];
   const isAdminAgenda=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
   const availLeads=leads.filter(l=>["reuniao","qualificado","negociacao"].includes(l.stage)&&(isAdminAgenda||!l.unit||allowedUnitsAgenda.includes(l.unit)));
@@ -701,11 +674,10 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
           <p style={{color:T.muted,fontSize:13,marginTop:3}}>Reuniões de fechamento · 30 min cada</p>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          {/* Agenda filter for admin/sdr */}
           {((userProfile?.role)==="admin"||(userProfile?.role)==="sdr")&&(
             <div style={{display:"flex",gap:4,background:"#f0f0f0",borderRadius:10,padding:4,border:`1px solid ${T.border}`}}>
               {[{id:"all",label:"📋 Todas"},{id:"pf",label:"🎯 Lucas PF"},{id:"chape",label:"🎯 Jaziel Chapecó"}].map(f=>(
-                <button key={f.id} onClick={()=>{setAgendaFilter(f.id);}} className="tap"
+                <button key={f.id} onClick={()=>setAgendaFilter(f.id)} className="tap"
                   style={{background:agendaFilter===f.id?T.accent:"transparent",color:agendaFilter===f.id?"white":T.muted,border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s",whiteSpace:"nowrap"}}>
                   {f.label}
                 </button>
@@ -955,7 +927,6 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
       {bookModal&&(
         <Modal title={`Agendar Reunião`} subtitle={`${new Date(bookModal.date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})} · ${bookModal.time} – ${addMinutes(bookModal.time,30)} (30 min)`} onClose={()=>setBookModal(null)} mob={mob} width={460}>
           <div style={{display:"grid",gap:13}}>
-            {/* Closer selector - only for SDR/Admin */}
             {((userProfile?.role)==="sdr"||(userProfile?.role)==="admin")&&<div>
               <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Agenda do Closer *</span>
               <div style={{display:"flex",gap:8}}>
@@ -969,17 +940,28 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
             </div>}
             <div>
               <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5}}>Lead *</span>
-              <input value={leadSearch} onChange={e=>setLeadSearch(e.target.value)} placeholder="🔍 Buscar lead pelo nome..." autoFocus
+              <input value={leadSearch} onChange={e=>setLeadSearch(e.target.value)} placeholder="🔍 Buscar lead pelo nome..."
                 style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",marginBottom:6}}
                 onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
               <select value={bookForm.lead_id} onChange={e=>setBookForm(p=>({...p,lead_id:e.target.value}))}
-                style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer",maxHeight:200}}>
+                style={{width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"11px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>
                 <option value="">Selecione o lead...</option>
                 {availLeads
                   .filter(l=>!bookForm.closer_unit||l.unit===bookForm.closer_unit||!l.unit)
                   .filter(l=>!leadSearch||l.name.toLowerCase().includes(leadSearch.toLowerCase()))
                   .map(l=>(<option key={l.id} value={l.id}>{l.name} — {l.unit?UNITS.find(u=>u.id===l.unit)?.label||"":"sem unidade"}</option>))}
               </select>
+            </div>
+            <div>
+              <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Tipo *</span>
+              <div style={{display:"flex",gap:8}}>
+                {[{id:"reuniao",label:"📅 Reunião",color:"#e85d20"},{id:"experimental",label:"🧪 Aula Experimental",color:"#10b981"}].map(t=>(
+                  <button key={t.id} type="button" onClick={()=>setBookForm(p=>({...p,tipo:t.id}))} className="tap"
+                    style={{flex:1,background:bookForm.tipo===t.id?t.color+"20":"transparent",border:`1.5px solid ${bookForm.tipo===t.id?t.color:T.border}`,borderRadius:10,padding:"10px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",color:bookForm.tipo===t.id?t.color:T.muted,transition:"all .15s"}}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Tipo de encontro</span>
@@ -1155,7 +1137,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
   };
   const filteredLeads=leads.filter(l=>{
     const s=(search||"").toLowerCase().trim();
-    const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""));
+    const matchSearch=!s||(l.name||"").toLowerCase().includes(s)||(l.responsavel||"").toLowerCase().includes(s)||(l.phone||"").replace(/\D/g,"").includes(s.replace(/\D/g,""))||(l.email||"").toLowerCase().includes(s)||(l.course||"").toLowerCase().includes(s);
     const matchUnit=!filterUnit||l.unit===filterUnit;
     return matchSearch&&matchUnit;
   });
@@ -1287,7 +1269,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
                 onDragLeave={()=>setDragOver(null)}
-                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);const shouldCelebrate=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);if(shouldCelebrate)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
+                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);const shouldCelebrate=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);setSearch("");setFilterUnit("");if(shouldCelebrate)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
                 style={{minWidth:195,flex:"0 0 195px",background:over?stage.hex+"11":T.bg,border:`1.5px solid ${over?stage.hex:T.border}`,borderRadius:T.radius,padding:12,transition:"all .18s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
@@ -1338,7 +1320,7 @@ function KanbanBoard({leads,onSelect,onMove,mob,onQuickAdd}) {
               <div key={stage.id}
                 onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
                 onDragLeave={()=>setDragOver(null)}
-                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);if(stage.id==="matriculado"&&prev?.stage!=="matriculado"){setMatriculaPending({leadId:dragging.current,prevStage:prev?.stage});setDragOver(null);dragging.current=null;return;}const shouldCelebrateReun=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);if(shouldCelebrateReun)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
+                onDrop={e=>{e.preventDefault();if(dragging.current){const prev=leads.find(l=>l.id===dragging.current);if(stage.id==="matriculado"&&prev?.stage!=="matriculado"){setMatriculaPending({leadId:dragging.current,prevStage:prev?.stage});setDragOver(null);dragging.current=null;return;}const shouldCelebrateReun=stage.id==="reuniao"&&prev?.stage!=="reuniao";onMove(dragging.current,stage.id);setSearch("");setFilterUnit("");if(shouldCelebrateReun)setTimeout(()=>setReuniaoCelebrating(true),50);}setDragOver(null);dragging.current=null;}}
                 style={{minWidth:195,flex:"0 0 195px",background:over?stage.hex+"11":T.bg,border:`1.5px solid ${over?stage.hex:T.border}`,borderRadius:T.radius,padding:12,transition:"all .18s"}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
                   <span style={{fontSize:13,color:stage.hex}}>{stage.emoji}</span>
@@ -1973,6 +1955,320 @@ function WhatsAppTab({lead, mob}) {
   );
 }
 
+/* ─── ORÇAMENTO TAB ──────────────────────────────────────────────── */
+const NIVEIS_CURSO=[
+  {label:"Starter",sub:"Básico",       meses:2, cor:"#f0997b"},
+  {label:"A1",     sub:"Elementar",    meses:4, cor:"#D85A30"},
+  {label:"A2",     sub:"Pré-inter.",   meses:3, cor:"#c44a15"},
+  {label:"B1",     sub:"Intermediário",meses:7, cor:"#7a2d0c"},
+];
+
+function OrcamentoTab({lead,mob}) {
+  const [pgto,setPgto]=useState("avista");
+  const [form,setForm]=useState({modulo:"",duracao:"",matricula:"",material:"",total:"",parcela:"",formapgto:"Cartão recorrente",obs:""});
+  const [gerado,setGerado]=useState(false);
+  const [inicioIdx,setInicioIdx]=useState(0);
+  const canvasRef=useRef(null);
+  const escRef=useRef(null);
+  const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+  useEffect(()=>{ drawEscada(); },[inicioIdx]);
+
+  const drawEscada=()=>{
+    const canvas=escRef.current; if(!canvas)return;
+    const SCALE=2;
+    const W=canvas.parentElement?.offsetWidth||480;
+    const H=240;
+    canvas.width=W*SCALE; canvas.height=H*SCALE;
+    canvas.style.width=W+"px"; canvas.style.height=H+"px";
+    const ctx=canvas.getContext("2d");
+    ctx.scale(SCALE,SCALE);
+    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
+    const N=NIVEIS_CURSO.length;
+    const PAD_L=16,PAD_R=16,PAD_B=36,PAD_T=36;
+    const areaW=W-PAD_L-PAD_R, areaH=H-PAD_T-PAD_B;
+    const stepW=areaW/N;
+    const rr=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();};
+    NIVEIS_CURSO.forEach((n,i)=>{
+      const isPast=i<inicioIdx, isInicio=i===inicioIdx;
+      const bH=((i+1)/N)*areaH;
+      const y=PAD_T+areaH-bH;
+      const x=PAD_L+i*stepW, bW=stepW-10, cx=x+stepW/2;
+      ctx.fillStyle=isPast?"#ececec":n.cor; ctx.globalAlpha=isPast?.45:1;
+      rr(x+5,y,bW,bH,6); ctx.fill(); ctx.globalAlpha=1;
+      if(isPast){ctx.strokeStyle="#c0c0c0";ctx.lineWidth=1.5;ctx.globalAlpha=.6;ctx.beginPath();ctx.moveTo(x+5,y+bH/2);ctx.lineTo(x+5+bW,y+bH/2);ctx.stroke();ctx.globalAlpha=1;}
+      ctx.textAlign="center";
+      ctx.font=`500 ${isInicio?14:12}px -apple-system,sans-serif`;
+      ctx.fillStyle=isPast?"#bbb":"#fff";
+      ctx.fillText(n.label,cx,y+22);
+      if(bH>50){ctx.font="400 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.75)";ctx.fillText(n.sub,cx,y+35);}
+      if(bH>70){ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.9)";ctx.fillText(`${n.meses} meses`,cx,y+bH-12);}
+      if(isInicio){
+        const bw2=72,bh2=18,bx=cx-bw2/2,by=y-28;
+        ctx.fillStyle="#e85d20"; rr(bx,by,bw2,bh2,4); ctx.fill();
+        ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#fff";
+        ctx.fillText("Início aqui",cx,by+13);
+        ctx.beginPath();ctx.moveTo(cx-4,by+bh2);ctx.lineTo(cx+4,by+bh2);ctx.lineTo(cx,by+bh2+6);ctx.closePath();ctx.fillStyle="#e85d20";ctx.fill();
+      }
+      ctx.font="500 11px -apple-system,sans-serif";
+      ctx.fillStyle=isInicio?"#e85d20":"#aaa";
+      ctx.fillText(n.label,cx,H-PAD_B+14);
+    });
+    ctx.strokeStyle="#e8e8e8";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(PAD_L,PAD_T+areaH+2);ctx.lineTo(W-PAD_R,PAD_T+areaH+2);ctx.stroke();
+  };
+
+  const gerar=()=>{
+    const canvas=canvasRef.current;
+    if(!canvas)return;
+    // Alta resolução: 3x para qualidade de impressão/WhatsApp
+    const SCALE=3;
+    const W=600,PAD=36;
+    const linhas=[
+      {label:"Nome",valor:lead.name||"—"},
+      {label:"Módulo de início",valor:form.modulo||"—"},
+      {label:"Duração do curso",valor:form.duracao||"—"},
+      {label:"Valor da matrícula",valor:form.matricula||"—"},
+      {label:"1º material didático",valor:form.material||"—"},
+      pgto==="avista"
+        ?{label:"Valor total do curso",valor:form.total||"—"}
+        :{label:"Parcela mensal",valor:`${form.parcela||"—"} · ${form.formapgto}`},
+    ];
+    if(form.obs)linhas.push({label:"Observações",valor:form.obs,multi:true});
+
+    const ROW_H=58,HEADER_H=110,FOOTER_H=52;
+    const obsLines=form.obs?Math.ceil(form.obs.length/55):0;
+    const obsExtra=obsLines>1?(obsLines-1)*22:0;
+    const ESC_H=200; // altura da escada no PNG
+    const H=HEADER_H+linhas.length*ROW_H+obsExtra+ESC_H+FOOTER_H+40;
+
+    // Tamanho real do canvas multiplicado pela escala
+    canvas.width=W*SCALE;
+    canvas.height=H*SCALE;
+    // Tamanho visual (CSS) — mantém o layout normal
+    canvas.style.width=W+"px";
+    canvas.style.height=H+"px";
+
+    const ctx=canvas.getContext("2d");
+    ctx.scale(SCALE,SCALE);
+    ctx.fillStyle="#ffffff";ctx.fillRect(0,0,W,H);
+
+    // Função auxiliar roundRect
+    const rr=(x,y,w,h,r)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();};
+
+    const img=new Image();
+    img.onload=()=>{
+      const ratio=img.width/img.height;
+      const logoH=56,logoW=logoH*ratio;
+      ctx.drawImage(img,PAD,18,logoW,logoH);
+
+      ctx.font="400 13px -apple-system,system-ui,sans-serif";
+      ctx.fillStyle="#aaa";
+      ctx.textAlign="right";
+      ctx.fillText("PROPOSTA COMERCIAL",W-PAD,44);
+      const dt=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"});
+      ctx.fillText(dt,W-PAD,62);
+      ctx.textAlign="left";
+
+      // Linha separadora laranja
+      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,88,W-PAD*2,2.5);
+
+      let y=106;
+      linhas.forEach((l,i)=>{
+        const obsH=l.multi?Math.max(ROW_H,ROW_H+(Math.ceil((l.valor||"").length/55)-1)*22):ROW_H;
+        if(i%2===0){ctx.fillStyle="#f7f7f7";ctx.fillRect(PAD-8,y-10,W-(PAD-8)*2,obsH);}
+        ctx.font="600 11px -apple-system,system-ui,sans-serif";ctx.fillStyle="#bbb";
+        ctx.fillText(l.label.toUpperCase(),PAD,y+10);
+        ctx.font="500 16px -apple-system,system-ui,sans-serif";ctx.fillStyle="#111";
+        if(l.multi&&(l.valor||"").length>55){
+          const words=(l.valor||"").split(" ");let line="",ly=y+30;
+          words.forEach(w=>{const test=line+w+" ";ctx.font="400 15px -apple-system,system-ui,sans-serif";if(ctx.measureText(test).width>W-PAD*2&&line){ctx.fillText(line.trim(),PAD,ly);ly+=22;line=w+" ";}else line=test;});
+          if(line)ctx.fillText(line.trim(),PAD,ly);
+        } else {ctx.fillText(l.valor||"—",PAD,y+30);}
+        y+=obsH;
+      });
+
+      // ── Escada de níveis ──────────────────────────────────────
+      const escY=y+16;
+      ctx.font="600 11px -apple-system,system-ui,sans-serif";
+      ctx.fillStyle="#bbb";ctx.textAlign="left";
+      ctx.fillText("TRILHA DO CURSO",PAD,escY);
+
+      const eTop=escY+12, eH=ESC_H-30, eW=W-PAD*2;
+      const N=NIVEIS_CURSO.length, stepW=eW/N;
+      const PAD_T2=28, PAD_B2=24, areaH2=eH-PAD_T2-PAD_B2;
+
+      NIVEIS_CURSO.forEach((n,i)=>{
+        const isPast=i<inicioIdx, isInicio=i===inicioIdx;
+        const bH=((i+1)/N)*areaH2;
+        const by=eTop+PAD_T2+areaH2-bH;
+        const bx=PAD+i*stepW, bW=stepW-8, cx=bx+stepW/2;
+        ctx.fillStyle=isPast?"#ececec":n.cor; ctx.globalAlpha=isPast?.4:1;
+        rr(bx+4,by,bW,bH,5); ctx.fill(); ctx.globalAlpha=1;
+        if(isPast){ctx.strokeStyle="#c0c0c0";ctx.lineWidth=1.2;ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(bx+4,by+bH/2);ctx.lineTo(bx+4+bW,by+bH/2);ctx.stroke();ctx.globalAlpha=1;}
+        ctx.textAlign="center";
+        ctx.font=`500 ${isInicio?13:11}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#bbb":"#fff";
+        ctx.fillText(n.label,cx,by+18);
+        if(bH>48){ctx.font="400 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.75)";ctx.fillText(n.sub,cx,by+30);}
+        if(bH>65){ctx.font="500 10px -apple-system,sans-serif";ctx.fillStyle=isPast?"#ccc":"rgba(255,255,255,.85)";ctx.fillText(`${n.meses}m`,cx,by+bH-10);}
+        if(isInicio){
+          const bw2=66,bh2=16,badgeX=cx-bw2/2,badgeY=by-24;
+          ctx.fillStyle="#e85d20"; rr(badgeX,badgeY,bw2,bh2,4); ctx.fill();
+          ctx.font="500 9px -apple-system,sans-serif"; ctx.fillStyle="#fff";
+          ctx.fillText("Início aqui",cx,badgeY+11);
+          ctx.beginPath();ctx.moveTo(cx-4,badgeY+bh2);ctx.lineTo(cx+4,badgeY+bh2);ctx.lineTo(cx,badgeY+bh2+5);ctx.closePath();ctx.fillStyle="#e85d20";ctx.fill();
+        }
+        ctx.font="500 10px -apple-system,sans-serif";
+        ctx.fillStyle=isInicio?"#e85d20":"#aaa";
+        ctx.fillText(n.label,cx,eTop+eH-4);
+      });
+      // linha chão
+      ctx.strokeStyle="#e8e8e8";ctx.lineWidth=1;ctx.beginPath();
+      ctx.moveTo(PAD,eTop+PAD_T2+areaH2+2);ctx.lineTo(W-PAD,eTop+PAD_T2+areaH2+2);ctx.stroke();
+
+      // Rodapé laranja
+      ctx.fillStyle="#e85d20";ctx.fillRect(0,H-FOOTER_H,W,FOOTER_H);
+      ctx.font="400 13px -apple-system,system-ui,sans-serif";
+      ctx.fillStyle="#fff";ctx.textAlign="center";
+      ctx.fillText("Nexus English Center  ·  nexusenglishcenter.com.br",W/2,H-FOOTER_H+30);
+      ctx.textAlign="left";
+      setGerado(true);
+    };
+    img.onerror=()=>{
+      ctx.fillStyle="#e85d20";ctx.fillRect(PAD,88,W-PAD*2,2.5);
+      ctx.font="700 22px -apple-system,system-ui,sans-serif";ctx.fillStyle="#e85d20";
+      ctx.fillText("NEXUS ENGLISH CENTER",PAD,56);
+      setGerado(true);
+    };
+    img.src="/logo.png";
+  };
+
+  const baixar=()=>{
+    const canvas=canvasRef.current;if(!canvas)return;
+    const a=document.createElement("a");
+    a.download=`orcamento_${(lead.name||"lead").replace(/\s+/g,"_")}.png`;
+    a.href=canvas.toDataURL("image/png");a.click();
+  };
+
+  const compartilhar=async()=>{
+    const canvas=canvasRef.current;if(!canvas)return;
+    canvas.toBlob(async blob=>{
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[new File([blob],"orcamento.png",{type:"image/png"})]})){
+        await navigator.share({files:[new File([blob],"orcamento.png",{type:"image/png"})],title:"Orçamento Nexus"});
+      } else {baixar();}
+    },"image/png");
+  };
+
+  const iStyle={width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"10px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  const lStyle={display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5};
+
+  return (
+    <div style={{display:"grid",gap:14}}>
+      <div style={{background:T.accentLight,border:"1px solid rgba(232,93,32,.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:T.accent,fontWeight:600}}>
+        💰 Preencha os dados e gere o orçamento em PNG para enviar pelo WhatsApp
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:12}}>
+        <label style={{display:"block"}}>
+          <span style={lStyle}>Módulo de início</span>
+          <input style={iStyle} value={form.modulo} onChange={e=>f("modulo",e.target.value)} placeholder="Ex: Starter A1" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+        <label style={{display:"block"}}>
+          <span style={lStyle}>Duração do curso</span>
+          <input style={iStyle} value={form.duracao} onChange={e=>f("duracao",e.target.value)} placeholder="Ex: 18 meses" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+        <label style={{display:"block"}}>
+          <span style={lStyle}>Valor da matrícula</span>
+          <input style={iStyle} value={form.matricula} onChange={e=>f("matricula",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+        <label style={{display:"block"}}>
+          <span style={lStyle}>1º material didático</span>
+          <input style={iStyle} value={form.material} onChange={e=>f("material",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+      </div>
+
+      <div>
+        <span style={lStyle}>Forma de pagamento</span>
+        <div style={{display:"flex",gap:8}}>
+          {[["avista","À vista"],["parcelado","Parcelado"]].map(([id,lbl])=>(
+            <button key={id} type="button" onClick={()=>setPgto(id)} className="tap"
+              style={{flex:1,background:pgto===id?T.accent:"transparent",color:pgto===id?"white":T.muted,border:`1.5px solid ${pgto===id?T.accent:T.border}`,borderRadius:10,padding:"10px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {pgto==="avista"&&(
+        <label style={{display:"block"}}>
+          <span style={lStyle}>Valor total do curso</span>
+          <input style={iStyle} value={form.total} onChange={e=>f("total",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+        </label>
+      )}
+      {pgto==="parcelado"&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <label style={{display:"block"}}>
+            <span style={lStyle}>Valor da parcela</span>
+            <input style={iStyle} value={form.parcela} onChange={e=>f("parcela",e.target.value)} placeholder="R$ 0,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+          </label>
+          <label style={{display:"block"}}>
+            <span style={lStyle}>Forma de pagamento</span>
+            <select style={{...iStyle,cursor:"pointer"}} value={form.formapgto} onChange={e=>f("formapgto",e.target.value)}>
+              <option>Cartão recorrente</option>
+              <option>Boleto</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      <label style={{display:"block"}}>
+        <span style={lStyle}>Observações importantes</span>
+        <textarea style={{...iStyle,resize:"vertical",minHeight:64}} value={form.obs} onChange={e=>f("obs",e.target.value)} placeholder="Ex: Desconto válido até sexta-feira..." onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+      </label>
+
+      {/* Escada de níveis */}
+      <div>
+        <span style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Trilha do curso — ponto de início</span>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          {NIVEIS_CURSO.map((n,i)=>(
+            <button key={n.label} type="button" onClick={()=>setInicioIdx(i)} className="tap"
+              style={{padding:"5px 14px",fontSize:12,fontWeight:700,border:`1.5px solid ${inicioIdx===i?"#e85d20":T.border}`,borderRadius:20,background:inicioIdx===i?"#e85d20":"transparent",color:inicioIdx===i?"white":T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+              {n.label}
+            </button>
+          ))}
+        </div>
+        <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${T.border}`}}>
+          <canvas ref={escRef} style={{display:"block",width:"100%"}}/>
+          <div style={{background:"#f8f8f8",padding:"10px 14px",display:"flex",gap:16,flexWrap:"wrap",borderTop:`1px solid ${T.border}`}}>
+            {(()=>{
+              const restantes=NIVEIS_CURSO.slice(inicioIdx);
+              const totalMeses=restantes.reduce((s,n)=>s+n.meses,0);
+              const anos=Math.floor(totalMeses/12), mesesR=totalMeses%12;
+              const dur=anos>0?`${anos} ano${anos>1?"s":""} e ${mesesR} meses`:`${totalMeses} meses`;
+              return(<>
+                <div><div style={{fontSize:10,color:T.muted}}>Começa em</div><div style={{fontSize:14,fontWeight:700,color:"#e85d20"}}>{NIVEIS_CURSO[inicioIdx].label}</div></div>
+                <div style={{borderLeft:`1px solid ${T.border}`,paddingLeft:14}}><div style={{fontSize:10,color:T.muted}}>Duração total</div><div style={{fontSize:14,fontWeight:700,color:T.text}}>{dur}</div></div>
+                <div style={{borderLeft:`1px solid ${T.border}`,paddingLeft:14}}><div style={{fontSize:10,color:T.muted}}>Níveis</div><div style={{fontSize:14,fontWeight:700,color:T.text}}>{restantes.length} de {NIVEIS_CURSO.length}</div></div>
+              </>);
+            })()}
+          </div>
+        </div>
+      </div>
+
+      <Btn onClick={gerar} full>📄 Gerar orçamento</Btn>
+
+      <canvas ref={canvasRef} style={{width:"100%",borderRadius:10,border:`1px solid ${T.border}`,display:gerado?"block":"none"}}/>
+
+      {gerado&&(
+        <div style={{display:"flex",gap:8}}>
+          <Btn onClick={baixar} full variant="ghost">⬇ Baixar PNG</Btn>
+          <Btn onClick={compartilhar} full>📤 Compartilhar</Btn>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── LEAD MODAL ─────────────────────────────────────────────────── */
 function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   const [tab,setTab]=useState("info"),[editing,setEditing]=useState(!lead.unit);
@@ -2016,7 +2312,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
         ))}
       </div>
       <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,marginBottom:18}}>
-        {[["info","Infos"],["historico","Histórico"],["whatsapp","💬 WhatsApp"],["followup","Follow-up"]].map(([id,lbl])=>(
+        {[["info","Infos"],["historico","Histórico"],["whatsapp","💬 WhatsApp"],["followup","Follow-up"],["orcamento","💰 Orçamento"]].map(([id,lbl])=>(
           <button key={id} onClick={()=>setTab(id)} className="tap"
             style={{flex:1,background:"none",border:"none",borderBottom:tab===id?`2px solid ${T.accent}`:"2px solid transparent",padding:"10px 8px",fontSize:14,fontWeight:600,color:tab===id?T.accent:T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:-1}}>
             {lbl}
@@ -2259,6 +2555,7 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
           </div>
         </div>
       )}
+      {tab==="orcamento"&&<OrcamentoTab lead={lead} mob={mob}/>}
       {/* Concluir follow-up modal */}
       {concluiModal&&(
         <div onClick={e=>e.target===e.currentTarget&&setConcluiModal(false)}
@@ -2355,6 +2652,21 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
     </Modal>
   );
 }
+
+/* ─── PROPOSTAS ──────────────────────────────────────────────────── */
+const NIVEIS_PROP=[
+  {label:"Starter",sub:"Básico",      meses:2,desc:"Vocabulário e primeiras frases.",cor:"#333"},
+  {label:"A1",     sub:"Elementar",   meses:4,desc:"Frases do dia a dia.",cor:"#333"},
+  {label:"A2",     sub:"Pré-inter.",  meses:3,desc:"Começa a destravar a fala.",cor:"#e85d20"},
+  {label:"B1",     sub:"Intermediário",meses:7,desc:"100% em inglês. Uso real.",cor:"#7a2d0c"},
+];
+const FEATURES_PROP=[
+  {title:"Aulas interativas e focadas em conversação",sub:"Aprenda falando, desde o primeiro dia."},
+  {title:"Turmas reduzidas",sub:"No máximo 6 alunos — mais tempo de fala."},
+  {title:"Plataforma de estudos online",sub:"Pratique em casa, no seu ritmo."},
+  {title:"Professor Nex (IA no WhatsApp)",sub:"Tire dúvidas e pratique a qualquer hora."},
+];
+const MESES_NOMES_P=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 function Propostas({leads,mob}) {
   const negLeads=leads.filter(l=>l.stage==="negociacao");
@@ -2710,11 +3022,6 @@ function Propostas({leads,mob}) {
   );
 }
 
-
-
-/* ─── AGENTE IA ──────────────────────────────────────────────────── */
-
-
 /* ─── AGENTE IA ──────────────────────────────────────────────────── */
 function AgenteIA({leads, mob}) {
   const [msgs, setMsgs] = useState([
@@ -3005,6 +3312,7 @@ export default function App() {
       const isAdmin=(profile?.role)==="admin";
       const filteredLd=(ld||[]).filter(l=>isAdmin||!l.unit||allowedUnits.includes(l.unit));
       if(cancelled)return;
+      if(cancelled)return;
       setLeads(filteredLd.map(l=>({
         id:l.id,name:l.name,phone:l.phone,email:l.email||"",course:l.course||"",source:l.source||"",
         stage:l.stage,notes:l.notes||"",responsavel:l.responsavel||"",unit:l.unit||"",createdAt:l.created_at,cadenciaStep:l.cadencia_step||0,cadenciaStarted:l.cadencia_started_at||null,matriculaMes:l.matricula_mes||null,valorMatricula:l.valor_matricula||l.valor_mensalidade||null,tipoVenda:l.tipo_venda||null,
@@ -3014,6 +3322,7 @@ export default function App() {
       })));
       setDbLoading(false);
     })();
+    return()=>{cancelled=true;};
     return()=>{cancelled=true;};
   },[session]);
 
