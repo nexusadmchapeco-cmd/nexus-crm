@@ -61,6 +61,7 @@ const NAV_ITEMS = [
   { id:"leads",      icon:"◎", label:"Leads"     },
   { id:"followups",  icon:"◷", label:"Follow-up" },
   { id:"relatorios", icon:"◈", label:"Relatórios"},
+  { id:"propostas",  icon:"📋", label:"Propostas"  },
   { id:"ia",         icon:"🤖", label:"Agente IA" },
 ];
 
@@ -2355,6 +2356,363 @@ function LeadModal({lead,onUpdate,onDelete,onClose,mob}) {
   );
 }
 
+function Propostas({leads,mob}) {
+  const negLeads=leads.filter(l=>l.stage==="negociacao");
+  const [tipo,setTipo]=useState("individual");
+  const [leadSel,setLeadSel]=useState(null);
+  const [moduloIdx,setModuloIdx]=useState(0);
+  const [pgtoMode,setPgtoMode]=useState("parcelado");
+  const [form,setForm]=useState({mes:"",matr:"",material:"",parcela:"",data1parcela:"",total:"",pgto:"Cartão recorrente",obs:"",filho:"",resp:""});
+  const [gerado,setGerado]=useState(false);
+  const canvasRef=useRef(null);
+  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+  const mesesOpts=Array.from({length:6},(_,i)=>{
+    const d=new Date(new Date().getFullYear(),new Date().getMonth()+i,1);
+    return `${MESES_NOMES_P[d.getMonth()]} ${d.getFullYear()}`;
+  });
+
+  const fmtData=(val)=>{if(!val)return"";const[y,m,d]=val.split("-");return`${d}/${m}/${y}`;};
+
+  const gerar=()=>{
+    const canvas=canvasRef.current; if(!canvas)return;
+    const SCALE=3,W=600;
+    const nome=(leadSel?.name)||"Aluno";
+    const unidade=leadSel?UNITS.find(u=>u.id===leadSel.unit)?.label||"Nexus":form.unidade||"Nexus";
+    const mes=form.mes||mesesOpts[0];
+    const matr=form.matr?`R$ ${form.matr}`:"—";
+    const parcela=form.parcela?`R$ ${form.parcela}`:"—";
+    const totalCurso=form.total?`R$ ${form.total}`:"—";
+    const data1=fmtData(form.data1parcela);
+    const material=form.material?`R$ ${form.material}`:"—";
+    const obs=form.obs;
+    const nomeDisplay=tipo==="filho"&&form.filho?form.filho:nome;
+    const subtitulo=tipo==="filho"&&form.resp?`Responsável: ${form.resp}`:`Proposta personalizada · ${unidade}`;
+    const totalMeses=NIVEIS_PROP.slice(moduloIdx).reduce((s,n)=>s+n.meses,0);
+    const isAvista=pgtoMode==="avista";
+    const HDR=190,JORNADA=210,FEAT_H=132,VAL_H=isAvista?140:(data1?172:150),OBS_H=obs?52:0,FOOTER_H=46;
+    const H=HDR+JORNADA+FEAT_H+VAL_H+OBS_H+FOOTER_H;
+    canvas.width=W*SCALE; canvas.height=H*SCALE;
+    canvas.style.width=W+"px"; canvas.style.height=H+"px";
+    const ctx=canvas.getContext("2d"); ctx.scale(SCALE,SCALE);
+    const rr=(x,y,w,h,r,fill)=>{ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();if(fill!==undefined){ctx.fillStyle=fill;ctx.fill();}};
+    // HEADER — sem bolinhas decorativas
+    ctx.fillStyle="#111"; ctx.fillRect(0,0,W,HDR);
+    const logoImg=new Image();
+    logoImg.onload=()=>{const lh=30,lw=lh*(logoImg.width/logoImg.height);ctx.drawImage(logoImg,28,18,lw,lh);drawRest();};
+    logoImg.onerror=()=>{ctx.font="700 18px -apple-system,sans-serif";ctx.fillStyle="#fff";ctx.fillText("NEXUS",28,40);drawRest();};
+    logoImg.src="/logo.png";
+    function drawRest(){
+      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("PROPOSTA PERSONALIZADA PARA",28,68);
+      ctx.font=`700 ${nomeDisplay.length>18?26:32}px -apple-system,sans-serif`; ctx.fillStyle="#fff"; ctx.fillText(nomeDisplay,28,106);
+      ctx.font="400 12px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText(subtitulo,28,126);
+      rr(28,140,148,28,6,"#e85d20"); ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(`Início: ${mes}`,40,158);
+      ctx.font="500 10px -apple-system,sans-serif"; ctx.fillStyle="#555"; ctx.textAlign="right"; ctx.fillText(unidade,W-28,158); ctx.textAlign="left";
+      let y=HDR;
+      // JORNADA — linha do tempo com setas
+      const JORNADA_H=JORNADA;
+      ctx.fillStyle="#ffffff"; ctx.fillRect(0,y,W,JORNADA_H);
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("A JORNADA NO CURSO",28,y+18);
+
+      const N=NIVEIS_PROP.length;
+      const tlY=y+90; // y da linha central — espaço suficiente pro badge acima
+      const tlX1=28, tlX2=W-28;
+      const tlW=tlX2-tlX1;
+      const stepW=tlW/N;
+
+      // Linha base cinza
+      ctx.strokeStyle="#e0e0e0"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(tlX1,tlY+10); ctx.lineTo(tlX2,tlY+10); ctx.stroke();
+
+      // Linha de progresso laranja (até o fim do último nível ativo)
+      const progressX=tlX1+stepW*(NIVEIS_PROP.length); // sempre full
+      ctx.strokeStyle="#e85d20"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(tlX1,tlY+10); ctx.lineTo(progressX,tlY+10); ctx.stroke();
+
+      NIVEIS_PROP.forEach((n,i)=>{
+        const isPast=i<moduloIdx, isStart=i===moduloIdx;
+        const dotX=tlX1+stepW*i+stepW/2;
+        const dotY=tlY+10;
+
+        // Seta entre níveis (exceto antes do primeiro)
+        if(i>0){
+          const arrowX=tlX1+stepW*i;
+          ctx.fillStyle=isPast?"#ccc":"#e85d20";
+          ctx.beginPath();
+          ctx.moveTo(arrowX-4,dotY-4);
+          ctx.lineTo(arrowX+4,dotY);
+          ctx.lineTo(arrowX-4,dotY+4);
+          ctx.closePath(); ctx.fill();
+        }
+
+        // Círculo do nível
+        const r=isPast?7:isStart?14:9;
+        // Para o início: anel externo pulsante
+        if(isStart){
+          // anel externo suave
+          ctx.beginPath(); ctx.arc(dotX,dotY,r+6,0,Math.PI*2);
+          ctx.fillStyle="rgba(232,93,32,.12)"; ctx.fill();
+          // anel médio
+          ctx.beginPath(); ctx.arc(dotX,dotY,r+3,0,Math.PI*2);
+          ctx.fillStyle="rgba(232,93,32,.22)"; ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(dotX,dotY,r,0,Math.PI*2);
+        ctx.fillStyle=isPast?"#e0e0e0":isStart?"#e85d20":"rgba(232,93,32,.15)";
+        ctx.fill();
+        if(isStart){
+          // contorno branco interno
+          ctx.strokeStyle="#fff"; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.arc(dotX,dotY,r,0,Math.PI*2); ctx.stroke();
+        }
+        if(!isPast&&!isStart){ ctx.strokeStyle="#e85d20"; ctx.lineWidth=1.5; ctx.stroke(); }
+
+        // Letra dentro do círculo
+        ctx.font=`${isStart?"700":"500"} ${isStart?13:10}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#bbb":isStart?"#fff":"#e85d20";
+        ctx.textAlign="center";
+        ctx.fillText(n.label[0],dotX,dotY+4);
+        ctx.textAlign="left";
+
+        // Label acima do círculo
+        ctx.font=`${isStart?"700":"500"} ${isStart?14:11}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#bbb":isStart?"#e85d20":"#444";
+        ctx.textAlign="center";
+        ctx.fillText(n.label,dotX,tlY-22);
+        ctx.textAlign="left";
+
+        // Meses abaixo
+        ctx.font=`${isStart?"500":"400"} ${isStart?11:10}px -apple-system,sans-serif`;
+        ctx.fillStyle=isPast?"#ccc":isStart?"#e85d20":"#888";
+        ctx.textAlign="center";
+        ctx.fillText(`${n.meses} meses`,dotX,tlY+32);
+        ctx.textAlign="left";
+
+        // Badge "Início aqui" para o módulo selecionado
+        if(isStart){
+          const bw=72,bh=18,bx=dotX-bw/2,by=tlY-58;
+          // linha vertical conectando badge ao círculo
+          ctx.strokeStyle="#e85d20"; ctx.lineWidth=1.5; ctx.globalAlpha=.4;
+          ctx.beginPath(); ctx.moveTo(dotX,by+bh+5); ctx.lineTo(dotX,dotY-r-6); ctx.stroke();
+          ctx.globalAlpha=1;
+          rr(bx,by,bw,bh,6,"#e85d20");
+          ctx.font="600 9px -apple-system,sans-serif"; ctx.fillStyle="#fff";
+          ctx.textAlign="center"; ctx.fillText("INÍCIO AQUI",dotX,by+12); ctx.textAlign="left";
+          // seta pra baixo
+          ctx.beginPath(); ctx.moveTo(dotX-5,by+bh); ctx.lineTo(dotX+5,by+bh); ctx.lineTo(dotX,by+bh+6); ctx.closePath();
+          ctx.fillStyle="#e85d20"; ctx.fill();
+        }
+      });
+
+      // Duração total
+      const durStr=`Duração total: ${totalMeses} meses`;
+      ctx.font="500 10px -apple-system,sans-serif";
+      const durW=ctx.measureText(durStr).width+18;
+      rr(W-28-durW,y+JORNADA_H-22,durW,15,5,"#e85d20");
+      ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.fillText(durStr,W-28-durW/2,y+JORNADA_H-11); ctx.textAlign="left";
+      y+=JORNADA_H;
+      // FEATURES — mais compactas, linha única por item
+      ctx.fillStyle="#fff"; ctx.fillRect(0,y,W,FEAT_H);
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("O QUE ESTÁ INCLUÍDO",28,y+18);
+      const fw=(W-56-10)/2,fh=40;
+      FEATURES_PROP.forEach((ft,i)=>{
+        const fx=28+(i%2)*(fw+10),fy=y+26+Math.floor(i/2)*(fh+6);
+        rr(fx,fy,fw,fh,7,"#f7f7f7");
+        // Dot laranja
+        ctx.fillStyle="#e85d20"; ctx.beginPath(); ctx.arc(fx+14,fy+fh/2,3,0,Math.PI*2); ctx.fill();
+        ctx.font="500 11px -apple-system,sans-serif"; ctx.fillStyle="#111"; ctx.fillText(ft.title,fx+24,fy+16);
+        ctx.font="400 10px -apple-system,sans-serif"; ctx.fillStyle="#999"; ctx.fillText(ft.sub,fx+24,fy+29);
+      });
+      y+=FEAT_H;
+      // VALORES
+      ctx.fillStyle="#1a1a1a"; ctx.fillRect(0,y,W,VAL_H);
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("CONDIÇÃO ESPECIAL",28,y+20);
+      const vbW=W/2-34;
+      // Matrícula (sempre aparece)
+      rr(28,y+28,vbW,VAL_H-42,10,"#e85d20");
+      ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.7)"; ctx.fillText("MATRÍCULA",40,y+44);
+      ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(matr,40,y+78);
+      ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillText(`1º Material: ${material}`,40,y+96);
+      const vx=W/2+6;
+      if(isAvista){
+        // À vista — bloco único com valor total
+        rr(vx,y+28,vbW,VAL_H-42,10,"#2a2a2a");
+        ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText("VALOR TOTAL DO CURSO",vx+12,y+44);
+        ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(totalCurso,vx+12,y+78);
+        ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#e85d20"; ctx.fillText("Pagamento à vista",vx+12,y+96);
+      } else {
+        // Parcelado
+        rr(vx,y+28,vbW,VAL_H-42,10,"#2a2a2a");
+        ctx.font="600 10px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText("MENSALIDADE",vx+12,y+44);
+        ctx.font="700 28px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(parcela,vx+12,y+78);
+        ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#888"; ctx.fillText(form.pgto,vx+12,y+96);
+        if(data1){rr(vx+12,y+106,vbW-24,17,5,"#333");ctx.font="500 10px -apple-system,sans-serif";ctx.fillStyle="#e85d20";ctx.textAlign="center";ctx.fillText(`1ª parcela: ${data1}`,vx+12+(vbW-24)/2,y+118);ctx.textAlign="left";}
+      }
+      y+=VAL_H;
+      if(obs){ctx.fillStyle="#fff8f5";ctx.fillRect(0,y,W,OBS_H);ctx.font="500 11px -apple-system,sans-serif";ctx.fillStyle="#c44a15";ctx.fillText("★  "+obs,28,y+OBS_H/2+5);y+=OBS_H;}
+      ctx.fillStyle="#e85d20"; ctx.fillRect(0,y,W,FOOTER_H);
+      ctx.font="400 11px -apple-system,sans-serif"; ctx.fillStyle="#fff"; ctx.fillText("Nexus English Center  ·  Proposta personalizada",28,y+FOOTER_H/2+4);
+      ctx.font="500 11px -apple-system,sans-serif"; ctx.textAlign="right"; ctx.fillText("Inglês que você usa de verdade",W-28,y+FOOTER_H/2+4); ctx.textAlign="left";
+      setGerado(true);
+    }
+  };
+
+  const baixar=()=>{
+    const canvas=canvasRef.current; if(!canvas)return;
+    const a=document.createElement("a");
+    a.download=`proposta_nexus_${(leadSel?.name||"lead").replace(/\s+/g,"_")}.png`;
+    a.href=canvas.toDataURL("image/png"); a.click();
+  };
+
+  const compartilhar=async()=>{
+    const canvas=canvasRef.current; if(!canvas)return;
+    canvas.toBlob(async blob=>{
+      const file=new File([blob],"proposta.png",{type:"image/png"});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:"Proposta Nexus"});
+      } else {baixar();}
+    },"image/png");
+  };
+
+  const iStyle={width:"100%",background:"#f8f8f8",border:`1.5px solid ${T.border}`,borderRadius:10,padding:"10px 13px",fontSize:15,color:T.text,outline:"none",fontFamily:"'DM Sans',sans-serif"};
+  const lStyle={display:"block",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:5};
+
+  return (
+    <div style={{animation:"fadeUp .3s"}}>
+      <div style={{marginBottom:20}}>
+        <h1 style={{fontFamily:"'Syne',sans-serif",fontSize:mob?26:32,fontWeight:700,letterSpacing:"-.5px"}}>Propostas</h1>
+        <p style={{color:T.muted,fontSize:13,marginTop:4}}>Gere propostas personalizadas em PNG para enviar pelo WhatsApp</p>
+      </div>
+
+      <div style={{display:mob?"flex":"grid",gridTemplateColumns:"380px 1fr",flexDirection:"column",gap:16,alignItems:"flex-start"}}>
+        {/* Formulário */}
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,padding:20,display:"grid",gap:14}}>
+
+          {/* Tipo */}
+          <div>
+            <span style={lStyle}>Tipo de proposta</span>
+            <div style={{display:"flex",gap:8}}>
+              {[["individual","Individual"],["filho","Para filho/filha"]].map(([id,lbl])=>(
+                <button key={id} type="button" onClick={()=>setTipo(id)} className="tap"
+                  style={{flex:1,background:tipo===id?T.accent:"transparent",color:tipo===id?"white":T.muted,border:`1.5px solid ${tipo===id?T.accent:T.border}`,borderRadius:10,padding:"9px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Lead */}
+          <div>
+            <span style={lStyle}>Lead em negociação</span>
+            <select style={{...iStyle,cursor:"pointer"}} value={leadSel?.id||""} onChange={e=>{const l=negLeads.find(x=>x.id===e.target.value);setLeadSel(l||null);setGerado(false);}}>
+              <option value="">Selecione o lead...</option>
+              {negLeads.map(l=>{const u=UNITS.find(x=>x.id===l.unit);return(<option key={l.id} value={l.id}>{l.name}{u?` — ${u.label}`:""}</option>);})}
+            </select>
+            {leadSel&&(
+              <div style={{marginTop:8,background:T.accentLight,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.accent,fontWeight:600}}>
+                {leadSel.name} · {UNITS.find(u=>u.id===leadSel.unit)?.label||"Sem unidade"} · {leadSel.course||"Sem curso"}
+              </div>
+            )}
+          </div>
+
+          {/* Filho */}
+          {tipo==="filho"&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <label style={{display:"block"}}><span style={lStyle}>Nome do filho/filha</span><input style={iStyle} value={form.filho} onChange={e=>ff("filho",e.target.value)} placeholder="Ex: Pedro Silva" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+              <label style={{display:"block"}}><span style={lStyle}>Responsável</span><input style={iStyle} value={form.resp} onChange={e=>ff("resp",e.target.value)} placeholder="Ex: Maria Silva" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+            </div>
+          )}
+
+          {/* Mês + Módulo */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <label style={{display:"block"}}>
+              <span style={lStyle}>Mês de início</span>
+              <select style={{...iStyle,cursor:"pointer"}} value={form.mes} onChange={e=>ff("mes",e.target.value)}>
+                {mesesOpts.map(m=><option key={m}>{m}</option>)}
+              </select>
+            </label>
+            <div>
+              <span style={lStyle}>Módulo de início</span>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:2}}>
+                {NIVEIS_PROP.map((n,i)=>(
+                  <button key={n.label} type="button" onClick={()=>setModuloIdx(i)} className="tap"
+                    style={{padding:"6px 10px",fontSize:11,fontWeight:700,border:`1.5px solid ${moduloIdx===i?"#e85d20":T.border}`,borderRadius:8,background:moduloIdx===i?"#e85d20":"transparent",color:moduloIdx===i?"white":T.muted,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Valores */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <label style={{display:"block"}}><span style={lStyle}>Matrícula (R$)</span><input style={iStyle} value={form.matr} onChange={e=>ff("matr",e.target.value)} placeholder="350,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+            <label style={{display:"block"}}><span style={lStyle}>1º Material (R$)</span><input style={iStyle} value={form.material} onChange={e=>ff("material",e.target.value)} placeholder="120,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+          </div>
+
+          <div>
+            <span style={lStyle}>Forma de pagamento do curso</span>
+            <div style={{display:"flex",gap:8}}>
+              {[["parcelado","Parcelado"],["avista","À vista"]].map(([id,lbl])=>(
+                <button key={id} type="button" onClick={()=>setPgtoMode(id)} className="tap"
+                  style={{flex:1,background:pgtoMode===id?T.accent:"transparent",color:pgtoMode===id?"white":T.muted,border:`1.5px solid ${pgtoMode===id?T.accent:T.border}`,borderRadius:10,padding:"9px 8px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {pgtoMode==="parcelado"&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              <label style={{display:"block"}}><span style={lStyle}>Valor da parcela (R$)</span><input style={iStyle} value={form.parcela} onChange={e=>ff("parcela",e.target.value)} placeholder="359,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+              <label style={{display:"block"}}><span style={lStyle}>Data da 1ª parcela</span><input type="date" style={iStyle} value={form.data1parcela} onChange={e=>ff("data1parcela",e.target.value)} onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+              <label style={{display:"block"}}>
+                <span style={lStyle}>Pagamento</span>
+                <select style={{...iStyle,cursor:"pointer"}} value={form.pgto} onChange={e=>ff("pgto",e.target.value)}>
+                  <option>Cartão recorrente</option>
+                  <option>Boleto</option>
+                </select>
+              </label>
+            </div>
+          )}
+
+          {pgtoMode==="avista"&&(
+            <label style={{display:"block"}}><span style={lStyle}>Valor total do curso (R$)</span><input style={iStyle} value={form.total} onChange={e=>ff("total",e.target.value)} placeholder="5.490,00" onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/></label>
+          )}
+
+          <label style={{display:"block"}}>
+            <span style={lStyle}>Observação especial</span>
+            <textarea style={{...iStyle,resize:"vertical",minHeight:60}} value={form.obs} onChange={e=>ff("obs",e.target.value)} placeholder="Ex: Condição válida até sexta-feira..." onFocus={e=>e.target.style.borderColor=T.accent} onBlur={e=>e.target.style.borderColor=T.border}/>
+          </label>
+
+          <Btn onClick={()=>{gerar();}} full>📋 Gerar proposta</Btn>
+
+          {gerado&&(
+            <div style={{display:"flex",gap:8}}>
+              <Btn onClick={baixar} full variant="ghost">⬇ Baixar PNG</Btn>
+              <Btn onClick={compartilhar} full>📤 Compartilhar</Btn>
+            </div>
+          )}
+        </div>
+
+        {/* Preview */}
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:T.radius,overflow:"hidden",minHeight:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          {!gerado?(
+            <div style={{textAlign:"center",color:T.muted,padding:40}}>
+              <div style={{fontSize:40,marginBottom:12}}>📋</div>
+              <div style={{fontWeight:600,fontSize:15}}>Preencha os dados e gere a proposta</div>
+              <div style={{fontSize:13,marginTop:6}}>O PNG aparecerá aqui para download e compartilhamento</div>
+            </div>
+          ):null}
+          <canvas ref={canvasRef} style={{width:"100%",display:gerado?"block":"none"}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── AGENTE IA ──────────────────────────────────────────────────── */
+
+
 /* ─── AGENTE IA ──────────────────────────────────────────────────── */
 function AgenteIA({leads, mob}) {
   const [msgs, setMsgs] = useState([
@@ -2717,6 +3075,7 @@ export default function App() {
               {page==="leads"      &&<LeadsList leads={leads} onSelect={setSelected} onAdd={()=>setShowAdd(true)} mob={mob}/>}
               {page==="followups"  &&<FollowUps leads={leads} onSelect={setSelected} mob={mob}/>}
               {page==="relatorios" &&<Relatorios leads={leads} mob={mob}/>}
+              {page==="propostas"  &&<Propostas leads={leads} mob={mob}/>}
               {page==="ia"          &&<AgenteIA leads={leads} mob={mob}/>}
             </>
           )}
