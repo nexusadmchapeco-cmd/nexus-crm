@@ -524,7 +524,7 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const [selectedSlotLead,setSelectedSlotLead]=useState(null);
   const [mobDay,setMobDay]=useState(today()); // {date, time}
   const [blockMode,setBlockMode]=useState(false);
-  const [agendaFilter,setAgendaFilter]=useState("all");
+  const [agendaFilter,setAgendaFilter]=useState("pf");
     const [leadSearch,setLeadSearch]=useState("");
   const [bookForm,setBookForm]=useState({lead_id:"",notes:"",tipo:"reuniao",closer_id:"",closer_unit:""});
   const [saving,setSaving]=useState(false);
@@ -532,15 +532,22 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
   const weekDates=getWeekDates(weekBase);
   const workDates=getWeekDates(weekBase); // Mon(0)..Sat(5)
 
+  // Set initial filter for admin/sdr
+  useEffect(()=>{
+    const role=userProfile?.role;
+    if(role==="admin"||role==="sdr") setAgendaFilter("pf");
+  },[userProfile]);
   useEffect(()=>{ loadData(); setMobDay(workDates.includes(today())?today():workDates[0]); },[weekBase,agendaFilter]);
   useEffect(()=>{
     (async()=>{
       const{data}=await supabase.from("leads").select("id,name,phone,course,unit,stage");
       const map={};
-      const allowedU=(userProfile?.units)||["pf","chape","online"];
-      const isAdm=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
+      const role3=userProfile?.role;
+      const isAdmSdr3=role3==="admin"||role3==="sdr";
       (data||[]).forEach(l=>{
-        if(isAdm||!l.unit||allowedU.includes(l.unit)) map[l.id]=l;
+        if(isAdmSdr3)map[l.id]=l;
+        else if(role3==="closer_pf"&&(!l.unit||l.unit==="pf"||l.unit==="online"))map[l.id]=l;
+        else if(role3==="closer_chape"&&(!l.unit||l.unit==="chape"))map[l.id]=l;
       });
       setAllLeadsMap(map);
     })();
@@ -553,10 +560,18 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     const myUnit=(userProfile?.units||[])[0]||null;
     let sQuery=supabase.from("agenda").select("*").gte("date",startD).lte("date",endD).neq("status","cancelado");
     let bQuery=supabase.from("agenda_blocked").select("*").gte("date",startD).lte("date",endD);
-    if(!isAdmOrSdr&&myUnit){
-      sQuery=sQuery.eq("unit",myUnit);
-      bQuery=bQuery.eq("unit",myUnit);
-    } else if(isAdmOrSdr&&agendaFilter!=="all"){
+    // Filter by role:
+    // - closer_pf: pf + online (use .in())
+    // - closer_chape: chape only
+    // - admin/sdr: use agendaFilter (pf or chape)
+    const role=userProfile?.role;
+    if(role==="closer_pf"){
+      sQuery=sQuery.in("unit",["pf","online"]);
+      bQuery=bQuery.in("unit",["pf","online"]);
+    } else if(role==="closer_chape"){
+      sQuery=sQuery.eq("unit","chape");
+      bQuery=bQuery.eq("unit","chape");
+    } else if(isAdmOrSdr&&agendaFilter){
       sQuery=sQuery.eq("unit",agendaFilter);
       bQuery=bQuery.eq("unit",agendaFilter);
     }
@@ -570,10 +585,11 @@ function AgendaCloser({leads,mob,onSelectLead,userProfile}) {
     if(!s.lead_id)return true;
     const l=allLeadsMap[s.lead_id];
     if(l)return true;
-    const isAdmSdr2=(userProfile?.role)==="admin"||(userProfile?.role)==="sdr";
-    if(isAdmSdr2)return true;
-    const myUnit2=(userProfile?.units||[])[0]||null;
-    return !myUnit2||s.unit===myUnit2;
+    const role2=userProfile?.role;
+    if(role2==="admin"||role2==="sdr")return true;
+    if(role2==="closer_pf")return !s.unit||s.unit==="pf"||s.unit==="online";
+    if(role2==="closer_chape")return s.unit==="chape";
+    return true;
   });
 
   const toggleBlock=async(date,time)=>{
@@ -673,9 +689,9 @@ ${bookForm.notes?`📝 *Obs:* ${bookForm.notes}
           <p style={{color:T.muted,fontSize:13,marginTop:3}}>Reuniões de fechamento · 30 min cada</p>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          {((userProfile?.role)==="admin"||(userProfile?.role)==="sdr")&&(
+          {(userProfile?.role==="admin"||userProfile?.role==="sdr")&&(
             <div style={{display:"flex",gap:4,background:"#f0f0f0",borderRadius:10,padding:4,border:`1px solid ${T.border}`}}>
-              {[{id:"all",label:"📋 Todas"},{id:"pf",label:"🎯 Lucas PF"},{id:"chape",label:"🎯 Jaziel Chapecó"}].map(f=>(
+              {[{id:"pf",label:"🎯 Lucas PF"},{id:"chape",label:"🎯 Jaziel Chapecó"}].map(f=>(
                 <button key={f.id} onClick={()=>setAgendaFilter(f.id)} className="tap"
                   style={{background:agendaFilter===f.id?T.accent:"transparent",color:agendaFilter===f.id?"white":T.muted,border:"none",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s",whiteSpace:"nowrap"}}>
                   {f.label}
